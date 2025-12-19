@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sistema de gestão para confeiteiras">
+    <meta name="theme-color" content="#ec4899">
+
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Doce Gestão">
+    <link rel="icon" type="image/png" href="./icons/icon-192x192.png">
+
+    <!-- Ícones para iOS -->
+    <link rel="apple-touch-icon" href="./icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="./icons/icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-192x192.png">
+
+    <title>Doce Gestão - Início</title>
+    <link rel="stylesheet" href="home-styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Pacifico&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="home-header">
+            <div class="logo-circle">
+                <i class="fas fa-cookie-bite"></i>
+            </div>
+            <h1 class="brand-name">Doce Gestão</h1>
+            <p class="welcome-text">O que vamos fazer hoje?</p>
+        </header>
+
+        <main class="home-menu">
+            <a href="calendario/calendario.html" class="menu-button">
+                <div class="menu-icon view">
+                    <i class="fas fa-calendar"></i>
+                </div>
+                <div class="menu-info">
+                    <span class="menu-title">Calendário</span>
+                    <span class="menu-desc">Acompanhe todas as suas encomendas</span>
+                </div>
+            </a>
+
+            <a href="editarcardapio/editarcardapio.html" class="menu-button">
+                <div class="menu-icon edit">
+                    <i class="fas fa-magic"></i>
+                </div>
+                <div class="menu-info">
+                    <span class="menu-title">Editar Cardápio</span>
+                    <span class="menu-desc">Altere preços, itens e cores</span>
+                </div>
+            </a>
+
+            <a href="cardapio/cardapio.html" class="menu-button">
+                <div class="menu-icon view">
+                    <i class="fas fa-eye"></i>
+                </div>
+                <div class="menu-info">
+                    <span class="menu-title">Ver Cardápio</span>
+                    <span class="menu-desc">Veja como suas clientes enxergam</span>
+                </div>
+            </a>
+
+            <a href="orcamento/orcamento.html" class="menu-button">
+                <div class="menu-icon view">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                </div>
+                <div class="menu-info">
+                    <span class="menu-title">Orçamentos</span>
+                    <span class="menu-desc">Crie orçamentos personalizados</span>
+                </div>
+            </a>
+
+            <div class="coming-soon">
+                <p>Mais funcionalidades em breve...</p>
+            </div>
+        </main>
+
+        <footer class="home-footer">
+            <p>Feito com <i class="fas fa-heart"></i> para o seu negócio</p>
+        </footer>
+    </div>
+
+    <!-- Botão de instalação do PWA -->
+    <div id="install-prompt" style="display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: white; padding: 16px 24px; border-radius: 16px; box-shadow: 0 10px 30px rgba(236, 72, 153, 0.3); z-index: 1000; max-width: 90%; text-align: center;">
+        <p style="margin-bottom: 12px; font-weight: 600; color: #1f2937;">Instalar Doce Gestão</p>
+        <button id="install-button" style="background: #ec4899; color: white; border: none; padding: 10px 20px; border-radius: 12px; font-weight: 600; cursor: pointer; font-size: 14px;">Instalar App</button>
+        <button id="dismiss-button" style="background: #f3f4f6; color: #6b7280; border: none; padding: 10px 20px; border-radius: 12px; font-weight: 600; cursor: pointer; margin-left: 8px; font-size: 14px;">Agora não</button>
+    </div>
+
+    <script src="home-script.js"></script>
+    <script>
+        // Registro do Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js')
+                    .then((registration) => {
+                        console.log('✅ Service Worker registrado com sucesso!', registration.scope);
+                    })
+                    .catch((error) => {
+                        console.error('❌ Falha ao registrar Service Worker:', error);
+                    });
+            });
+        }
+
+        // Prompt de instalação do PWA
+        let deferredPrompt;
+        const installPrompt = document.getElementById('install-prompt');
+        const installButton = document.getElementById('install-button');
+        const dismissButton = document.getElementById('dismiss-button');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installPrompt.style.display = 'block';
+            console.log('💡 PWA pode ser instalado!');
+        });
+
+        installButton.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log(`Usuário ${outcome === 'accepted' ? '✅ aceitou' : '❌ recusou'} a instalação`);
+                deferredPrompt = null;
+                installPrompt.style.display = 'none';
+            }
+        });
+
+        dismissButton.addEventListener('click', () => {
+            installPrompt.style.display = 'none';
+            console.log('⏭️ Instalação adiada pelo usuário');
+        });
+
+        window.addEventListener('appinstalled', () => {
+            console.log('🎉 PWA instalado com sucesso!');
+            installPrompt.style.display = 'none';
+        });
+    </script>
+</body>
+</html>
