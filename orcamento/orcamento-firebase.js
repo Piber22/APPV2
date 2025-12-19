@@ -34,7 +34,7 @@ window.state = {
 let unsubscribe = null;
 
 // ============================================
-// SETUP SINCRONIZAÇÃO EM TEMPO REAL
+// SETUP SINCRONIZAÇÃO EM TEMPO REA L
 // ============================================
 
 function setupRealtimeMenu() {
