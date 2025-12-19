@@ -502,5 +502,5 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// Make editOrder global for onclic k
+// Make editOrder global for onclick
 window.editOrder = editOrder;
