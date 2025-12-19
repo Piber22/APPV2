@@ -415,8 +415,12 @@ async function handleSaveOrder(e) {
             notes
         };
 
-        if (state.editingOrder) {
+        // ⭐ CORREÇÃO: Se está editando, incluir o ID
+        if (state.editingOrder && state.editingOrder.id) {
             orderData.id = state.editingOrder.id;
+            console.log('📝 Editando encomenda existente:', orderData.id);
+        } else {
+            console.log('➕ Criando nova encomenda');
         }
 
         await FirebaseOrders.saveOrder(orderData);

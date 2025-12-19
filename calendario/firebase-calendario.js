@@ -1,269 +1,281 @@
 // ============================================
-// FIREBASE INTEGRATION - CALENDÁRIO
-// Sincronização em tempo real para encomendas
+// FIREBASE INTEGRATION - CALENDARIO
 // ============================================
 
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, onSnapshot, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+// Import Firebase modules
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import {
+    getFirestore,
+    collection,
+    addDoc,
+    updateDoc,
+    deleteDoc,
+    doc,
+    getDocs,
+    onSnapshot,
+    query,
+    orderBy,
+    Timestamp
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-// Configuração do Firebase
+// ============================================
+// FIREBASE CONFIGURATION
+// ============================================
+
 const firebaseConfig = {
-  apiKey: "AIzaSyBLhKaigyOT9dCAd9iA1o5j18rFB4rQ5uo",
-  authDomain: "doce-gestao-4b032.firebaseapp.com",
-  projectId: "doce-gestao-4b032",
-  storageBucket: "doce-gestao-4b032.firebasestorage.app",
-  messagingSenderId: "318295225306",
-  appId: "1:318295225306:web:3beaebbb5979edba6686e3"
+    apiKey: "AIzaSyBSBkE_hRL1ahN7VBcAZ9kSBhtsxfU7TzY",
+    authDomain: "doce-gestao.firebaseapp.com",
+    projectId: "doce-gestao",
+    storageBucket: "doce-gestao.firebasestorage.app",
+    messagingSenderId: "126743217287",
+    appId: "1:126743217287:web:3c7d99de4b5c29e14b8a00"
 };
 
-// Inicializar Firebase
+// Initialize Firebase
+console.log('🔥 Inicializando Firebase...');
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-
-// Referência à coleção de encomendas
-const ordersCollection = collection(db, 'orders');
-
-let unsubscribe = null;
+console.log('✅ Firebase inicializado com sucesso');
 
 // ============================================
-// CARREGAR TODAS AS ENCOMENDAS
+// FIREBASE ORDERS API
 // ============================================
 
-async function loadOrders() {
-    console.log('📦 Carregando encomendas do Firebase...');
+window.FirebaseOrders = {
+    // Collection name
+    COLLECTION: 'orders',
 
-    try {
-        const q = query(ordersCollection, orderBy('date', 'asc'));
-        const querySnapshot = await getDocs(q);
+    // Load all orders from Firebase
+    async loadOrders() {
+        try {
+            console.log('📦 Carregando encomendas do Firebase...');
 
-        const orders = [];
-        querySnapshot.forEach((doc) => {
-            orders.push({
-                id: doc.id,
-                ...doc.data()
-            });
-        });
+            const q = query(
+                collection(db, this.COLLECTION),
+                orderBy('date', 'asc')
+            );
 
-        console.log('✅ Encomendas carregadas:', orders.length);
-        return orders;
-
-    } catch (error) {
-        console.error('❌ Erro ao carregar encomendas:', error);
-        throw error;
-    }
-}
-
-// ============================================
-// SINCRONIZAÇÃO EM TEMPO REAL
-// ============================================
-
-function setupRealtimeOrders(callback) {
-    console.log('🔄 Configurando sincronização em tempo real...');
-
-    const q = query(ordersCollection, orderBy('date', 'asc'));
-
-    unsubscribe = onSnapshot(q,
-        (snapshot) => {
+            const querySnapshot = await getDocs(q);
             const orders = [];
-            snapshot.forEach((doc) => {
+
+            querySnapshot.forEach((doc) => {
                 orders.push({
                     id: doc.id,
                     ...doc.data()
                 });
             });
 
-            console.log('🔔 Encomendas atualizadas em tempo real:', orders.length);
-            callback(orders);
-        },
-        (error) => {
-            console.error('❌ Erro na sincronização:', error);
-            showError('Erro ao sincronizar encomendas');
+            console.log(`✅ ${orders.length} encomendas carregadas`);
+            return orders;
+
+        } catch (error) {
+            console.error('❌ Erro ao carregar encomendas:', error);
+            throw error;
         }
-    );
+    },
 
-    console.log('✅ Sincronização em tempo real ativada');
-}
+    // Save order (create or update)
+    async saveOrder(orderData) {
+        try {
+            if (orderData.id) {
+                // Update existing order
+                console.log('📝 Atualizando encomenda:', orderData.id);
 
-// ============================================
-// SALVAR ENCOMENDA (CRIAR OU ATUALIZAR)
-// ============================================
+                const orderRef = doc(db, this.COLLECTION, orderData.id);
+                const { id, createdAt, ...dataToUpdate } = orderData;
 
-async function saveOrder(orderData) {
-    console.log('💾 Salvando encomenda...', orderData);
+                await updateDoc(orderRef, {
+                    ...dataToUpdate,
+                    updatedAt: Timestamp.now()
+                });
 
-    try {
-        // Se não tem ID ou ID é timestamp, criar novo
-        if (!orderData.id || orderData.id.length < 15) {
-            orderData.id = Date.now().toString();
+                console.log('✅ Encomenda atualizada com sucesso');
+                return orderData.id;
+
+            } else {
+                // Create new order
+                console.log('➕ Criando nova encomenda');
+
+                const docRef = await addDoc(collection(db, this.COLLECTION), {
+                    ...orderData,
+                    createdAt: Timestamp.now(),
+                    updatedAt: Timestamp.now()
+                });
+
+                console.log('✅ Encomenda criada com sucesso:', docRef.id);
+                return docRef.id;
+            }
+
+        } catch (error) {
+            console.error('❌ Erro ao salvar encomenda:', error);
+            throw error;
         }
+    },
 
-        const orderRef = doc(ordersCollection, orderData.id);
+    // Remove order
+    async removeOrder(orderId) {
+        try {
+            console.log('🗑️ Excluindo encomenda:', orderId);
 
-        await setDoc(orderRef, {
-            client: orderData.client,
-            product: orderData.product,
-            date: orderData.date,
-            value: parseFloat(orderData.value),
-            status: orderData.status,
-            notes: orderData.notes || '',
-            lastModified: new Date().toISOString()
-        });
+            await deleteDoc(doc(db, this.COLLECTION, orderId));
 
-        console.log('✅ Encomenda salva com sucesso');
-        return { id: orderData.id, ...orderData };
+            console.log('✅ Encomenda excluída');
 
-    } catch (error) {
-        console.error('❌ Erro ao salvar encomenda:', error);
-        throw error;
-    }
-}
+        } catch (error) {
+            console.error('❌ Erro ao excluir encomenda:', error);
+            throw error;
+        }
+    },
 
-// ============================================
-// REMOVER ENCOMENDA
-// ============================================
+    // Setup realtime listener
+    setupRealtimeOrders(callback) {
+        try {
+            console.log('🔄 Configurando sincronização em tempo real...');
 
-async function removeOrder(orderId) {
-    console.log('🗑️ Removendo encomenda:', orderId);
+            const q = query(
+                collection(db, this.COLLECTION),
+                orderBy('date', 'asc')
+            );
 
-    try {
-        const orderRef = doc(ordersCollection, orderId);
-        await deleteDoc(orderRef);
+            const unsubscribe = onSnapshot(q,
+                (snapshot) => {
+                    const orders = [];
 
-        console.log('✅ Encomenda removida com sucesso');
-        return true;
+                    snapshot.forEach((doc) => {
+                        orders.push({
+                            id: doc.id,
+                            ...doc.data()
+                        });
+                    });
 
-    } catch (error) {
-        console.error('❌ Erro ao remover encomenda:', error);
-        throw error;
-    }
-}
-
-// ============================================
-// UI HELPERS
-// ============================================
-
-function showLoading(message = 'Carregando...') {
-    let overlay = document.getElementById('loadingOverlay');
-
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.id = 'loadingOverlay';
-        overlay.innerHTML = `
-            <div class="loading-content">
-                <div class="loading-spinner"></div>
-                <p class="loading-message">${message}</p>
-            </div>
-        `;
-        document.body.appendChild(overlay);
-
-        // Adiciona CSS se ainda não existe
-        if (!document.getElementById('loadingStyles')) {
-            const style = document.createElement('style');
-            style.id = 'loadingStyles';
-            style.textContent = `
-                #loadingOverlay {
-                    position: fixed;
-                    inset: 0;
-                    background: rgba(0, 0, 0, 0.6);
-                    backdrop-filter: blur(4px);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 9999;
+                    console.log('🔔 Dados atualizados em tempo real:', orders.length, 'encomendas');
+                    callback(orders);
+                },
+                (error) => {
+                    console.error('❌ Erro na sincronização:', error);
                 }
-                .loading-content {
+            );
+
+            console.log('✅ Sincronização em tempo real ativada');
+            return unsubscribe;
+
+        } catch (error) {
+            console.error('❌ Erro ao configurar sincronização:', error);
+            throw error;
+        }
+    },
+
+    // UI Helper: Show loading overlay
+    showLoading(message = 'Carregando...') {
+        let overlay = document.getElementById('loadingOverlay');
+
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'loadingOverlay';
+            overlay.style.cssText = `
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.7);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                z-index: 9999;
+                backdrop-filter: blur(4px);
+            `;
+
+            overlay.innerHTML = `
+                <div style="
                     background: white;
                     padding: 32px;
                     border-radius: 20px;
+                    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
                     text-align: center;
-                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-                }
-                .loading-spinner {
-                    width: 48px;
-                    height: 48px;
-                    border: 4px solid #fce7f3;
-                    border-top-color: #ec4899;
-                    border-radius: 50%;
-                    animation: spin 0.8s linear infinite;
-                    margin: 0 auto 16px;
-                }
-                .loading-message {
-                    color: #374151;
-                    font-weight: 600;
-                    font-size: 16px;
-                    margin: 0;
-                }
+                    min-width: 200px;
+                ">
+                    <div style="
+                        width: 50px;
+                        height: 50px;
+                        border: 4px solid #fce7f3;
+                        border-top-color: #ec4899;
+                        border-radius: 50%;
+                        margin: 0 auto 16px;
+                        animation: spin 1s linear infinite;
+                    "></div>
+                    <div id="loadingMessage" style="
+                        color: #374151;
+                        font-weight: 600;
+                        font-size: 16px;
+                    ">${message}</div>
+                </div>
+            `;
+
+            // Add spin animation
+            const style = document.createElement('style');
+            style.textContent = `
                 @keyframes spin {
                     to { transform: rotate(360deg); }
                 }
             `;
-            document.head.appendChild(style);
+            overlay.appendChild(style);
+
+            document.body.appendChild(overlay);
+        } else {
+            document.getElementById('loadingMessage').textContent = message;
+            overlay.style.display = 'flex';
         }
-    } else {
-        overlay.querySelector('.loading-message').textContent = message;
+    },
+
+    // UI Helper: Hide loading overlay
+    hideLoading() {
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) {
+            overlay.style.display = 'none';
+        }
+    },
+
+    // UI Helper: Show error message
+    showError(message) {
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ef4444;
+            color: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+            animation: slideDown 0.3s;
+        `;
+        toast.textContent = message;
+
+        // Add animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideDown {
+                from {
+                    opacity: 0;
+                    transform: translateX(-50%) translateY(-20px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateX(-50%) translateY(0);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.animation = 'slideDown 0.3s reverse';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
     }
-
-    overlay.style.display = 'flex';
-}
-
-function hideLoading() {
-    const overlay = document.getElementById('loadingOverlay');
-    if (overlay) {
-        overlay.style.display = 'none';
-    }
-}
-
-function showError(message) {
-    const errorToast = document.createElement('div');
-    errorToast.style.cssText = `
-        position: fixed;
-        bottom: 90px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #ef4444;
-        color: white;
-        padding: 16px 24px;
-        border-radius: 12px;
-        font-weight: 600;
-        z-index: 10000;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        animation: fadeIn 0.3s;
-        max-width: 90%;
-        text-align: center;
-    `;
-    errorToast.innerHTML = `
-        <i class="fas fa-exclamation-circle" style="margin-right: 8px;"></i>
-        ${message}
-    `;
-    document.body.appendChild(errorToast);
-
-    setTimeout(() => {
-        errorToast.style.animation = 'fadeOut 0.3s';
-        setTimeout(() => errorToast.remove(), 300);
-    }, 4000);
-}
-
-// ============================================
-// CLEANUP
-// ============================================
-
-window.addEventListener('beforeunload', () => {
-    if (unsubscribe) {
-        unsubscribe();
-        console.log('🔌 Sincronização desconectada');
-    }
-});
-
-// ============================================
-// EXPORTAR API
-// ============================================
-
-window.FirebaseOrders = {
-    loadOrders,
-    saveOrder,
-    removeOrder,
-    setupRealtimeOrders,
-    showLoading,
-    hideLoading,
-    showError
 };
+
+console.log('✅ FirebaseOrders API disponível globalmente');
