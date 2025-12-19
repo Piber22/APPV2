@@ -1,79 +1,166 @@
+// ============================================
+// SERVICE WORKER - DOCE GESTÃO
+// Corrigido para ignorar recursos externos com CORS
+// ============================================
+
 const CACHE_NAME = 'doce-gestao-v1';
-const urlsToCache = [
-  './',
-  './index.html',
-  './home-styles.css',
-  './home-script.js',
-  './calendario/calendario.html',
-  './editarcardapio/editarcardapio.html',
-  './cardapio/cardapio.html',
-  './orcamento/orcamento.html'
+
+// Recursos para cachear (apenas recursos locais e CDNs seguros)
+const RESOURCES_TO_CACHE = [
+    '/',
+    '/index.html',
+    '/cardapio.html',
+    '/orcamento.html',
+    '/styles.css',
+    '/cardapio-styles.css',
+    '/orcamento-styles.css',
+    '/cardapio-script.js',
+    '/orcamento-firebase.js',
+    '/orcamento-script.js',
+    // Fontes do Google (geralmente funcionam bem)
+    'https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Pacifico&display=swap',
+    // Font Awesome
+    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
 ];
 
-// Instalação do Service Worker
+// ============================================
+// INSTALAÇÃO
+// ============================================
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Cache aberto');
-        return cache.addAll(urlsToCache);
-      })
-      .catch((error) => {
-        console.log('Erro ao cachear:', error);
-      })
-  );
-  self.skipWaiting();
+    console.log('🔧 Service Worker: Instalando...');
+
+    event.waitUntil(
+        caches.open(CACHE_NAME)
+            .then((cache) => {
+                console.log('📦 Cache aberto');
+
+                // Cachear recursos um por um para evitar falha total
+                return Promise.allSettled(
+                    RESOURCES_TO_CACHE.map(url => {
+                        return cache.add(url).catch(err => {
+                            console.warn(`⚠️ Não foi possível cachear: ${url}`, err.message);
+                            return Promise.resolve(); // Continuar mesmo se falhar
+                        });
+                    })
+                );
+            })
+            .then(() => {
+                console.log('✅ Service Worker instalado com sucesso');
+                return self.skipWaiting(); // Ativar imediatamente
+            })
+            .catch((error) => {
+                console.error('❌ Erro ao instalar Service Worker:', error);
+            })
+    );
 });
 
-// Ativação do Service Worker
+// ============================================
+// ATIVAÇÃO
+// ============================================
+
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Removendo cache antigo:', cacheName);
-            return caches.delete(cacheName);
-          }
+    console.log('⚡ Service Worker: Ativando...');
+
+    event.waitUntil(
+        caches.keys().then((cacheNames) => {
+            return Promise.all(
+                cacheNames.map((cacheName) => {
+                    // Remover caches antigos
+                    if (cacheName !== CACHE_NAME) {
+                        console.log('🗑️ Removendo cache antigo:', cacheName);
+                        return caches.delete(cacheName);
+                    }
+                })
+            );
+        }).then(() => {
+            console.log('✅ Service Worker ativado');
+            return self.clients.claim(); // Controlar todas as páginas imediatamente
         })
-      );
-    })
-  );
-  self.clients.claim();
+    );
 });
 
-// Interceptação de requisições
+// ============================================
+// FETCH - ESTRATÉGIA NETWORK FIRST
+// ============================================
+
 self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Retorna do cache se encontrado
-        if (response) {
-          return response;
-        }
+    const { request } = event;
+    const url = new URL(request.url);
 
-        // Caso contrário, busca na rede
-        return fetch(event.request)
-          .then((response) => {
-            // Verifica se a resposta é válida
-            if (!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
-            }
+    // Ignorar requisições não-HTTP/HTTPS
+    if (!request.url.startsWith('http')) {
+        return;
+    }
 
-            // Clona a resposta para armazenar no cache
-            const responseToCache = response.clone();
+    // Ignorar recursos externos problemáticos (como transparenttextures.com)
+    const blockedDomains = [
+        'transparenttextures.com',
+        'unsplash.com'
+    ];
 
-            caches.open(CACHE_NAME)
-              .then((cache) => {
-                cache.put(event.request, responseToCache);
-              });
+    if (blockedDomains.some(domain => url.hostname.includes(domain))) {
+        // Deixar o navegador lidar com isso sem cache
+        return;
+    }
 
-            return response;
-          })
-          .catch(() => {
-            // Se falhar, tenta retornar a página inicial do cache
-            return caches.match('./index.html');
-          });
-      })
-  );
+    // Estratégia: Network First, fallback para Cache
+    event.respondWith(
+        fetch(request)
+            .then((response) => {
+                // Se a resposta for válida, clonar e cachear
+                if (response && response.status === 200 && response.type === 'basic') {
+                    const responseToCache = response.clone();
+
+                    caches.open(CACHE_NAME).then((cache) => {
+                        cache.put(request, responseToCache).catch(err => {
+                            // Ignorar erros de cache silenciosamente
+                        });
+                    });
+                }
+
+                return response;
+            })
+            .catch(() => {
+                // Se falhar, tentar buscar do cache
+                return caches.match(request).then((cachedResponse) => {
+                    if (cachedResponse) {
+                        return cachedResponse;
+                    }
+
+                    // Se não houver cache, retornar página offline (opcional)
+                    if (request.destination === 'document') {
+                        return caches.match('/index.html');
+                    }
+
+                    return new Response('Recurso não disponível offline', {
+                        status: 503,
+                        statusText: 'Service Unavailable',
+                        headers: new Headers({
+                            'Content-Type': 'text/plain'
+                        })
+                    });
+                });
+            })
+    );
 });
+
+// ============================================
+// MENSAGENS
+// ============================================
+
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+
+    if (event.data && event.data.type === 'CLEAR_CACHE') {
+        event.waitUntil(
+            caches.delete(CACHE_NAME).then(() => {
+                console.log('🗑️ Cache limpo');
+            })
+        );
+    }
+});
+
+console.log('✅ Service Worker carregado');
