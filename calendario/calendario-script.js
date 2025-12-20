@@ -329,7 +329,7 @@ function openNewOrderForm(dateStr = null) {
     });
 
     // Set date if provided
-    if (dateStr) {
+    if (dateStr && typeof dateStr === 'string') {
         document.getElementById('orderDate').value = dateStr;
     } else {
         // Set today's date
