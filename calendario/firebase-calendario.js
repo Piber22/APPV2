@@ -20,15 +20,16 @@ import {
 
 // ============================================
 // FIREBASE CONFIGURATION
+// ⭐ USANDO O MESMO PROJETO QUE FUNCIONA
 // ============================================
 
 const firebaseConfig = {
-    apiKey: "AIzaSyBSBkE_hRL1ahN7VBcAZ9kSBhtsxfU7TzY",
-    authDomain: "doce-gestao.firebaseapp.com",
-    projectId: "doce-gestao",
-    storageBucket: "doce-gestao.firebasestorage.app",
-    messagingSenderId: "126743217287",
-    appId: "1:126743217287:web:3c7d99de4b5c29e14b8a00"
+    apiKey: "AIzaSyBLhKaigyOT9dCAd9iA1o5j18rFB4rQ5uo",
+    authDomain: "doce-gestao-4b032.firebaseapp.com",
+    projectId: "doce-gestao-4b032",
+    storageBucket: "doce-gestao-4b032.firebasestorage.app",
+    messagingSenderId: "318295225306",
+    appId: "1:318295225306:web:3beaebbb5979edba6686e3"
 };
 
 // Initialize Firebase
