@@ -1,0 +1,247 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Nunito', sans-serif;
+    background: linear-gradient(135deg, #FFF5F7 0%, #FFE5EC 100%);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #1f2937;
+    padding: 20px;
+}
+
+.login-container {
+    width: 100%;
+    max-width: 420px;
+    background: white;
+    border-radius: 32px;
+    padding: 48px 32px;
+    box-shadow: 0 20px 40px rgba(236, 72, 153, 0.15);
+    animation: fadeInScale 0.6s ease-out;
+}
+
+/* Header */
+.login-header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.logo-circle {
+    background: linear-gradient(135deg, #ec4899 0%, #fb7185 100%);
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    box-shadow: 0 10px 30px rgba(236, 72, 153, 0.3);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.logo-circle i {
+    font-size: 50px;
+    color: white;
+}
+
+.brand-name {
+    font-family: 'Pacifico', cursive;
+    font-size: 36px;
+    color: #ec4899;
+    margin-bottom: 8px;
+}
+
+.welcome-text {
+    font-size: 16px;
+    color: #6b7280;
+    line-height: 1.6;
+}
+
+/* Login Form */
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.google-button {
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #1f2937;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.google-button:hover {
+    background: #f9fafb;
+    border-color: #ec4899;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(236, 72, 153, 0.2);
+}
+
+.google-button:active {
+    transform: translateY(0);
+}
+
+.google-icon {
+    width: 24px;
+    height: 24px;
+}
+
+.divider {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 8px 0;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #e5e7eb;
+}
+
+.divider-text {
+    font-size: 14px;
+    color: #9ca3af;
+    font-weight: 600;
+}
+
+/* Benefits */
+.benefits {
+    /*margin-top: 32px;
+    padding-top: 32px;
+    border-top: 1px solid #f3f4f6;*/
+}
+
+.benefit-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.benefit-icon {
+    width: 40px;
+    height: 40px;
+    background: #fce7f3;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ec4899;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.benefit-text {
+    font-size: 14px;
+    color: #6b7280;
+    line-height: 1.4;
+}
+
+/* Footer */
+.login-footer {
+    margin-top: 32px;
+    text-align: center;
+    font-size: 13px;
+    color: #9ca3af;
+    line-height: 1.6;
+}
+
+.login-footer a {
+    color: #ec4899;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.login-footer a:hover {
+    text-decoration: underline;
+}
+
+/* Loading State */
+.loading {
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.spinner {
+    display: none;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #f3f4f6;
+    border-top-color: #ec4899;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.loading .spinner {
+    display: block;
+}
+
+.loading .google-icon {
+    display: none;
+}
+
+/* Animations */
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .login-container {
+        padding: 40px 24px;
+    }
+
+    .brand-name {
+        font-size: 32px;
+    }
+
+    .logo-circle {
+        width: 80px;
+        height: 80px;
+    }
+
+    .logo-circle i {
+        font-size: 40px;
+    }
+}
