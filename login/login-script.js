@@ -21,6 +21,32 @@ const auth = getAuth(app);
 // Elementos DOM
 const loginBtn = document.getElementById('google-login-btn');
 
+// Função para obter o caminho base correto (funciona local e GitHub Pages)
+function getBasePath() {
+    const currentPath = window.location.pathname;
+
+    // Se estiver no GitHub Pages (ex: /APPV2/login/login.html)
+    if (currentPath.includes('/login/login.html')) {
+        // Remove /login/login.html para pegar a base
+        return currentPath.replace('/login/login.html', '');
+    }
+
+    return '';
+}
+
+// Função para obter o caminho correto do index
+function getIndexPath() {
+    const basePath = getBasePath();
+
+    // Se tiver base path (GitHub Pages), usa caminho absoluto
+    if (basePath) {
+        return basePath + '/index.html';
+    }
+
+    // Se for local, usa caminho relativo
+    return '../index.html';
+}
+
 // Função de login com Google
 async function loginWithGoogle() {
     try {
@@ -56,10 +82,10 @@ async function loginWithGoogle() {
         localStorage.removeItem('redirectAfterLogin');
 
         // Redirecionar para o hub ou página anterior
-        if (redirectPath && redirectPath !== '/login/login.html') {
-            window.location.href = '..' + redirectPath;
+        if (redirectPath && redirectPath !== '/login/login.html' && !redirectPath.includes('/login/login.html')) {
+            window.location.href = redirectPath;
         } else {
-            window.location.href = '../index.html';
+            window.location.href = getIndexPath();
         }
         */
 
@@ -87,10 +113,12 @@ async function loginWithGoogle() {
 
         // Redirecionar para o hub ou página anterior
         setTimeout(() => {
-            if (redirectPath && redirectPath !== '/login/login.html') {
-                window.location.href = '..' + redirectPath;
+            if (redirectPath && redirectPath !== '/login/login.html' && !redirectPath.includes('/login/login.html')) {
+                window.location.href = redirectPath;
             } else {
-                window.location.href = '../index.html';
+                const indexPath = getIndexPath();
+                console.log('Redirecionando para:', indexPath);
+                window.location.href = indexPath;
             }
         }, 1000);
 
@@ -126,7 +154,9 @@ function checkIfUserIsLoggedIn() {
             console.log('Usuário já logado:', userData);
 
             // Redirecionar para o hub se já estiver logado
-            window.location.href = '../index.html';
+            const indexPath = getIndexPath();
+            console.log('Já autenticado. Redirecionando para:', indexPath);
+            window.location.href = indexPath;
 
         } catch (error) {
             console.error('Erro ao ler dados do usuário:', error);
