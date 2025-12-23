@@ -42,20 +42,29 @@ async function loginWithGoogle() {
             email: user.email,
             displayName: user.displayName,
             photoURL: user.photoURL,
-            emailVerified: user.emailVerified
+            emailVerified: user.emailVerified,
+            loginTime: new Date().toISOString()
         };
 
         localStorage.setItem('user', JSON.stringify(userData));
+        localStorage.setItem('isAuthenticated', 'true');
 
         console.log('Login realizado com sucesso!', userData);
 
-        // Redirecionar para o hub
-        window.location.href = 'index.html';
+        // Verificar se há uma página para redirecionar após login
+        const redirectPath = localStorage.getItem('redirectAfterLogin');
+        localStorage.removeItem('redirectAfterLogin');
+
+        // Redirecionar para o hub ou página anterior
+        if (redirectPath && redirectPath !== '/login/login.html') {
+            window.location.href = '..' + redirectPath;
+        } else {
+            window.location.href = '../index.html';
+        }
         */
 
         // ====== SIMULAÇÃO (REMOVER EM PRODUÇÃO) ======
         console.log('Login simulado com sucesso!');
-        alert('Login realizado! (Modo simulação)\n\nQuando integrar com Firebase, você será redirecionado automaticamente.');
 
         // Salvar usuário simulado
         const mockUser = {
@@ -63,12 +72,27 @@ async function loginWithGoogle() {
             email: 'usuario@exemplo.com',
             displayName: 'Usuário Teste',
             photoURL: 'https://via.placeholder.com/150',
-            emailVerified: true
+            emailVerified: true,
+            loginTime: new Date().toISOString()
         };
-        localStorage.setItem('user', JSON.stringify(mockUser));
 
-        // Descomentar para testar redirecionamento:
-        // window.location.href = 'index.html';
+        localStorage.setItem('user', JSON.stringify(mockUser));
+        localStorage.setItem('isAuthenticated', 'true');
+
+        alert('Login realizado! (Modo simulação)\n\nVocê será redirecionado para o hub.');
+
+        // Verificar se há uma página para redirecionar após login
+        const redirectPath = localStorage.getItem('redirectAfterLogin');
+        localStorage.removeItem('redirectAfterLogin');
+
+        // Redirecionar para o hub ou página anterior
+        setTimeout(() => {
+            if (redirectPath && redirectPath !== '/login/login.html') {
+                window.location.href = '..' + redirectPath;
+            } else {
+                window.location.href = '../index.html';
+            }
+        }, 1000);
 
     } catch (error) {
         console.error('Erro no login:', error);
@@ -80,6 +104,8 @@ async function loginWithGoogle() {
             errorMessage = 'Login cancelado. Por favor, tente novamente.';
         } else if (error.code === 'auth/network-request-failed') {
             errorMessage = 'Erro de conexão. Verifique sua internet.';
+        } else if (error.code === 'auth/unauthorized-domain') {
+            errorMessage = 'Domínio não autorizado. Configure o Firebase corretamente.';
         }
 
         alert(errorMessage);
@@ -91,19 +117,21 @@ async function loginWithGoogle() {
 
 // Função para verificar se usuário já está logado
 function checkIfUserIsLoggedIn() {
+    const isAuthenticated = localStorage.getItem('isAuthenticated');
     const user = localStorage.getItem('user');
 
-    if (user) {
+    if (isAuthenticated === 'true' && user) {
         try {
             const userData = JSON.parse(user);
             console.log('Usuário já logado:', userData);
 
             // Redirecionar para o hub se já estiver logado
-            // window.location.href = 'index.html';
+            window.location.href = '../index.html';
 
         } catch (error) {
             console.error('Erro ao ler dados do usuário:', error);
             localStorage.removeItem('user');
+            localStorage.removeItem('isAuthenticated');
         }
     }
 }
@@ -117,7 +145,9 @@ window.addEventListener('load', checkIfUserIsLoggedIn);
 // Função para logout (útil para testes)
 window.logout = function() {
     localStorage.removeItem('user');
+    localStorage.removeItem('isAuthenticated');
     console.log('Logout realizado!');
+    alert('Você foi desconectado!');
     window.location.reload();
 };
 
