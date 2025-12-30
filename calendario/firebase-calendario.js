@@ -1,49 +1,72 @@
 // ============================================
-// FIREBASE INTEGRATION - CALENDARIO (CORRIGIDO)
-// Substitui o firebase-calendario.js existente em /calendario/
+// FIREBASE INTEGRATION - CALENDARIO
 // ============================================
 
+// Import Firebase modules
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
-    loadUserOrders,
-    saveUserOrder,
-    deleteUserOrder,
-    watchUserOrders
-} from '../user-data-service.js';
-import { getCurrentUser } from '../auth-service.js';
+    getFirestore,
+    collection,
+    addDoc,
+    updateDoc,
+    deleteDoc,
+    doc,
+    getDocs,
+    onSnapshot,
+    query,
+    orderBy,
+    Timestamp
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 // ============================================
-// AGUARDAR AUTENTICAÇÃO ESTAR PRONTA
+// FIREBASE CONFIGURATION
+// ⭐ USANDO O MESMO PROJETO QUE FUNCIONA
 // ============================================
 
-async function waitForAuth() {
-    if (window.authReady) {
-        await window.authReady;
-    }
-}
+const firebaseConfig = {
+    apiKey: "AIzaSyBLhKaigyOT9dCAd9iA1o5j18rFB4rQ5uo",
+    authDomain: "doce-gestao-4b032.firebaseapp.com",
+    projectId: "doce-gestao-4b032",
+    storageBucket: "doce-gestao-4b032.firebasestorage.app",
+    messagingSenderId: "318295225306",
+    appId: "1:318295225306:web:3beaebbb5979edba6686e3"
+};
+
+// Initialize Firebase
+console.log('🔥 Inicializando Firebase...');
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+console.log('✅ Firebase inicializado com sucesso');
 
 // ============================================
 // FIREBASE ORDERS API
 // ============================================
 
 window.FirebaseOrders = {
+    // Collection name
     COLLECTION: 'orders',
 
-    // Load all orders
+    // Load all orders from Firebase
     async loadOrders() {
         try {
-            // ✅ AGUARDAR AUTENTICAÇÃO
-            await waitForAuth();
+            console.log('📦 Carregando encomendas do Firebase...');
 
-            console.log('📦 Carregando encomendas do usuário...');
+            const q = query(
+                collection(db, this.COLLECTION),
+                orderBy('date', 'asc')
+            );
 
-            const user = getCurrentUser();
-            if (!user) {
-                throw new Error('Usuário não autenticado');
-            }
+            const querySnapshot = await getDocs(q);
+            const orders = [];
 
-            const orders = await loadUserOrders();
+            querySnapshot.forEach((doc) => {
+                orders.push({
+                    id: doc.id,
+                    ...doc.data()
+                });
+            });
 
-            console.log(`✅ ${orders.length} encomendas carregadas para ${user.email}`);
+            console.log(`✅ ${orders.length} encomendas carregadas`);
             return orders;
 
         } catch (error) {
@@ -52,27 +75,36 @@ window.FirebaseOrders = {
         }
     },
 
-    // Save order
+    // Save order (create or update)
     async saveOrder(orderData) {
         try {
-            // ✅ AGUARDAR AUTENTICAÇÃO
-            await waitForAuth();
-
-            const user = getCurrentUser();
-            if (!user) {
-                throw new Error('Usuário não autenticado');
-            }
-
             if (orderData.id) {
+                // Update existing order
                 console.log('📝 Atualizando encomenda:', orderData.id);
-                const orderId = await saveUserOrder(orderData);
+
+                const orderRef = doc(db, this.COLLECTION, orderData.id);
+                const { id, createdAt, ...dataToUpdate } = orderData;
+
+                await updateDoc(orderRef, {
+                    ...dataToUpdate,
+                    updatedAt: Timestamp.now()
+                });
+
                 console.log('✅ Encomenda atualizada com sucesso');
-                return orderId;
+                return orderData.id;
+
             } else {
+                // Create new order
                 console.log('➕ Criando nova encomenda');
-                const orderId = await saveUserOrder(orderData);
-                console.log('✅ Encomenda criada com sucesso:', orderId);
-                return orderId;
+
+                const docRef = await addDoc(collection(db, this.COLLECTION), {
+                    ...orderData,
+                    createdAt: Timestamp.now(),
+                    updatedAt: Timestamp.now()
+                });
+
+                console.log('✅ Encomenda criada com sucesso:', docRef.id);
+                return docRef.id;
             }
 
         } catch (error) {
@@ -84,16 +116,10 @@ window.FirebaseOrders = {
     // Remove order
     async removeOrder(orderId) {
         try {
-            // ✅ AGUARDAR AUTENTICAÇÃO
-            await waitForAuth();
-
-            const user = getCurrentUser();
-            if (!user) {
-                throw new Error('Usuário não autenticado');
-            }
-
             console.log('🗑️ Excluindo encomenda:', orderId);
-            await deleteUserOrder(orderId);
+
+            await deleteDoc(doc(db, this.COLLECTION, orderId));
+
             console.log('✅ Encomenda excluída');
 
         } catch (error) {
@@ -103,23 +129,33 @@ window.FirebaseOrders = {
     },
 
     // Setup realtime listener
-    async setupRealtimeOrders(callback) {
+    setupRealtimeOrders(callback) {
         try {
-            // ✅ AGUARDAR AUTENTICAÇÃO
-            await waitForAuth();
-
-            const user = getCurrentUser();
-            if (!user) {
-                throw new Error('Usuário não autenticado');
-            }
-
             console.log('🔄 Configurando sincronização em tempo real...');
-            console.log('👤 Usuário:', user.email);
 
-            const unsubscribe = watchUserOrders((orders) => {
-                console.log('🔔 Dados atualizados em tempo real:', orders.length, 'encomendas');
-                callback(orders);
-            });
+            const q = query(
+                collection(db, this.COLLECTION),
+                orderBy('date', 'asc')
+            );
+
+            const unsubscribe = onSnapshot(q,
+                (snapshot) => {
+                    const orders = [];
+
+                    snapshot.forEach((doc) => {
+                        orders.push({
+                            id: doc.id,
+                            ...doc.data()
+                        });
+                    });
+
+                    console.log('🔔 Dados atualizados em tempo real:', orders.length, 'encomendas');
+                    callback(orders);
+                },
+                (error) => {
+                    console.error('❌ Erro na sincronização:', error);
+                }
+            );
 
             console.log('✅ Sincronização em tempo real ativada');
             return unsubscribe;
@@ -175,6 +211,7 @@ window.FirebaseOrders = {
                 </div>
             `;
 
+            // Add spin animation
             const style = document.createElement('style');
             style.textContent = `
                 @keyframes spin {
@@ -190,6 +227,7 @@ window.FirebaseOrders = {
         }
     },
 
+    // UI Helper: Hide loading overlay
     hideLoading() {
         const overlay = document.getElementById('loadingOverlay');
         if (overlay) {
@@ -197,6 +235,7 @@ window.FirebaseOrders = {
         }
     },
 
+    // UI Helper: Show error message
     showError(message) {
         const toast = document.createElement('div');
         toast.style.cssText = `
@@ -215,6 +254,7 @@ window.FirebaseOrders = {
         `;
         toast.textContent = message;
 
+        // Add animation
         const style = document.createElement('style');
         style.textContent = `
             @keyframes slideDown {
@@ -239,4 +279,4 @@ window.FirebaseOrders = {
     }
 };
 
-console.log('✅ FirebaseOrders API disponível globalmente (com dados por usuário)');
+console.log('✅ FirebaseOrders API disponível globalmente');

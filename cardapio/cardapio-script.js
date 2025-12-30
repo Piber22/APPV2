@@ -1,10 +1,28 @@
 // ============================================
-// CARDÁPIO PÚBLICO - FIREBASE (CORRIGIDO)
-// Substitui o cardapio-script.js existente em /cardapio/
+// CARDÁPIO PÚBLICO - FIREBASE (TEMPO REAL)
+// Sincronização automática em tempo real
 // ============================================
 
-import { watchUserMenu } from '../user-data-service.js';
-import { getCurrentUser } from '../auth-service.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getFirestore, doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+// Configuração do Firebase
+const firebaseConfig = {
+  apiKey: "AIzaSyBLhKaigyOT9dCAd9iA1o5j18rFB4rQ5uo",
+  authDomain: "doce-gestao-4b032.firebaseapp.com",
+  projectId: "doce-gestao-4b032",
+  storageBucket: "doce-gestao-4b032.firebasestorage.app",
+  messagingSenderId: "318295225306",
+  appId: "1:318295225306:web:3beaebbb5979edba6686e3"
+};
+
+// Inicializar Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// Referência ao documento
+const MENU_DOC_ID = 'default';
+const menuDocRef = doc(db, 'menu', MENU_DOC_ID);
 
 // State
 let menuData = {
@@ -16,57 +34,41 @@ let menuData = {
 let unsubscribe = null;
 
 // ============================================
-// AGUARDAR AUTENTICAÇÃO ESTAR PRONTA
-// ============================================
-
-async function waitForAuth() {
-    if (window.authReady) {
-        await window.authReady;
-    }
-}
-
-// ============================================
 // SETUP SINCRONIZAÇÃO EM TEMPO REAL
 // ============================================
 
-async function setupRealtimeMenu() {
-    try {
-        // ✅ AGUARDAR AUTENTICAÇÃO
-        await waitForAuth();
+function setupRealtimeMenu() {
+    console.log('🔄 Configurando sincronização em tempo real...');
 
-        console.log('🔄 Configurando sincronização em tempo real...');
+    unsubscribe = onSnapshot(menuDocRef,
+        (doc) => {
+            if (doc.exists()) {
+                const data = doc.data();
 
-        const user = getCurrentUser();
-        if (!user) {
-            console.error('❌ Usuário não autenticado');
-            showError('Você precisa fazer login para ver o cardápio');
-            return;
+                console.log('✅ Dados recebidos:', {
+                    categorias: data.categories?.length || 0,
+                    itens: data.items?.length || 0,
+                    lastModified: data.lastModified
+                });
+
+                menuData.settings = data.settings || {};
+                menuData.categories = data.categories || [];
+                menuData.items = data.items || [];
+
+                renderMenu();
+                showMenu();
+
+                console.log('🔔 Cardápio atualizado em tempo real!');
+            } else {
+                console.warn('⚠️ Documento não existe ainda');
+                showError('Cardápio ainda não foi configurado');
+            }
+        },
+        (error) => {
+            console.error('❌ Erro na sincronização:', error);
+            showError('Erro ao carregar cardápio');
         }
-
-        console.log('👤 Carregando cardápio de:', user.email);
-
-        unsubscribe = watchUserMenu((data) => {
-            console.log('✅ Dados recebidos:', {
-                usuário: user.email,
-                categorias: data.categories?.length || 0,
-                itens: data.items?.length || 0,
-                lastModified: data.lastModified
-            });
-
-            menuData.settings = data.settings || {};
-            menuData.categories = data.categories || [];
-            menuData.items = data.items || [];
-
-            renderMenu();
-            showMenu();
-
-            console.log('🔔 Cardápio atualizado em tempo real!');
-        });
-
-    } catch (error) {
-        console.error('❌ Erro ao configurar sincronização:', error);
-        showError('Erro ao carregar cardápio');
-    }
+    );
 }
 
 // ============================================
@@ -222,25 +224,8 @@ async function init() {
     showLoading();
 
     try {
-        // ✅ AGUARDAR AUTENTICAÇÃO PRIMEIRO
-        await waitForAuth();
-
-        const user = getCurrentUser();
-
-        if (!user) {
-            console.error('❌ Usuário não autenticado');
-            showError('Você precisa fazer login para visualizar o cardápio');
-
-            setTimeout(() => {
-                window.location.href = '../login/login.html';
-            }, 2000);
-            return;
-        }
-
-        console.log('👤 Usuário:', user.email);
-
         // Configurar listener de tempo real
-        await setupRealtimeMenu();
+        setupRealtimeMenu();
 
         console.log('✨ Cardápio iniciado com sucesso!');
         console.log('🔄 Sincronização em tempo real ATIVA');
@@ -248,7 +233,7 @@ async function init() {
 
     } catch (error) {
         console.error('❌ Erro ao inicializar:', error);
-        showError('Erro ao carregar cardápio');
+        showError();
     }
 }
 
@@ -265,5 +250,3 @@ window.addEventListener('beforeunload', () => {
 
 // Carregar ao abrir a página
 document.addEventListener('DOMContentLoaded', init);
-
-console.log('✅ Cardápio script carregado (com dados por usuário)');

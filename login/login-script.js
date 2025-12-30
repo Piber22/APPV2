@@ -1,249 +1,184 @@
-// ============================================
-// LOGIN SCRIPT - COM AUTENTICAÇÃO REAL
-// Substitui o login-script.js existente
-// ============================================
+// Firebase será configurado aqui
+// import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+// import { getAuth, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
-import { loginWithGoogle, onAuthChanged } from '../auth-service.js';
+// Configuração do Firebase (adicione suas credenciais)
+/*
+const firebaseConfig = {
+    apiKey: "SUA_API_KEY",
+    authDomain: "SEU_AUTH_DOMAIN",
+    projectId: "SEU_PROJECT_ID",
+    storageBucket: "SEU_STORAGE_BUCKET",
+    messagingSenderId: "SEU_MESSAGING_SENDER_ID",
+    appId: "SEU_APP_ID"
+};
 
-// ============================================
-// ELEMENTOS DOM
-// ============================================
+// Inicializar Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+*/
 
+// Elementos DOM
 const loginBtn = document.getElementById('google-login-btn');
-const btnText = loginBtn.querySelector('span');
-const spinner = loginBtn.querySelector('.spinner');
-const googleIcon = loginBtn.querySelector('.google-icon');
 
-// ============================================
-// FUNÇÕES DE NAVEGAÇÃO
-// ============================================
-
+// Função para obter o caminho base correto (funciona local e GitHub Pages)
 function getBasePath() {
     const currentPath = window.location.pathname;
 
+    // Se estiver no GitHub Pages (ex: /APPV2/login/login.html)
     if (currentPath.includes('/login/login.html')) {
+        // Remove /login/login.html para pegar a base
         return currentPath.replace('/login/login.html', '');
     }
 
     return '';
 }
 
+// Função para obter o caminho correto do index
 function getIndexPath() {
     const basePath = getBasePath();
 
+    // Se tiver base path (GitHub Pages), usa caminho absoluto
     if (basePath) {
         return basePath + '/index.html';
     }
 
+    // Se for local, usa caminho relativo
     return '../index.html';
 }
 
-// ============================================
-// FUNÇÕES DE UI
-// ============================================
-
-function showLoading() {
-    loginBtn.disabled = true;
-    loginBtn.classList.add('loading');
-    googleIcon.style.display = 'none';
-    spinner.style.display = 'block';
-    btnText.textContent = 'Entrando...';
-}
-
-function hideLoading() {
-    loginBtn.disabled = false;
-    loginBtn.classList.remove('loading');
-    googleIcon.style.display = 'block';
-    spinner.style.display = 'none';
-    btnText.textContent = 'Continuar com Google';
-}
-
-function showError(message) {
-    const errorDiv = document.createElement('div');
-    errorDiv.style.cssText = `
-        position: fixed;
-        top: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #fee2e2;
-        border: 2px solid #ef4444;
-        color: #991b1b;
-        padding: 16px 24px;
-        border-radius: 12px;
-        font-weight: 600;
-        z-index: 10000;
-        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-        animation: slideDown 0.3s ease;
-        max-width: 90%;
-        text-align: center;
-    `;
-    errorDiv.innerHTML = `
-        <i class="fas fa-exclamation-circle" style="margin-right: 8px;"></i>
-        ${message}
-    `;
-
-    document.body.appendChild(errorDiv);
-
-    setTimeout(() => {
-        errorDiv.style.animation = 'slideUp 0.3s ease';
-        setTimeout(() => errorDiv.remove(), 300);
-    }, 5000);
-}
-
-function showSuccess(message) {
-    const successDiv = document.createElement('div');
-    successDiv.style.cssText = `
-        position: fixed;
-        top: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #d1fae5;
-        border: 2px solid #10b981;
-        color: #065f46;
-        padding: 16px 24px;
-        border-radius: 12px;
-        font-weight: 600;
-        z-index: 10000;
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-        animation: slideDown 0.3s ease;
-        max-width: 90%;
-        text-align: center;
-    `;
-    successDiv.innerHTML = `
-        <i class="fas fa-check-circle" style="margin-right: 8px;"></i>
-        ${message}
-    `;
-
-    document.body.appendChild(successDiv);
-
-    setTimeout(() => successDiv.remove(), 2000);
-}
-
-// ============================================
-// FUNÇÃO DE LOGIN
-// ============================================
-
-async function handleLogin() {
-    showLoading();
-
+// Função de login com Google
+async function loginWithGoogle() {
     try {
-        const result = await loginWithGoogle();
+        loginBtn.classList.add('loading');
 
-        console.log('✅ Login bem-sucedido:', result.user);
+        // Simulação do login (remova isso quando integrar com Firebase)
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
-        showSuccess(`Bem-vindo(a), ${result.user.nome}! 🎉`);
+        // ====== INTEGRAÇÃO REAL COM FIREBASE ======
+        // Descomente o código abaixo quando configurar o Firebase:
+        /*
+        const provider = new GoogleAuthProvider();
+        const result = await signInWithPopup(auth, provider);
+        const user = result.user;
 
-        // Aguardar um pouco para mostrar a mensagem
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Salvar dados do usuário no localStorage
+        const userData = {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+            emailVerified: user.emailVerified,
+            loginTime: new Date().toISOString()
+        };
+
+        localStorage.setItem('user', JSON.stringify(userData));
+        localStorage.setItem('isAuthenticated', 'true');
+
+        console.log('Login realizado com sucesso!', userData);
 
         // Verificar se há uma página para redirecionar após login
         const redirectPath = localStorage.getItem('redirectAfterLogin');
         localStorage.removeItem('redirectAfterLogin');
 
-        if (redirectPath && !redirectPath.includes('/login/login.html')) {
+        // Redirecionar para o hub ou página anterior
+        if (redirectPath && redirectPath !== '/login/login.html' && !redirectPath.includes('/login/login.html')) {
             window.location.href = redirectPath;
         } else {
             window.location.href = getIndexPath();
         }
+        */
 
-    } catch (error) {
-        console.error('❌ Erro no login:', error);
-        hideLoading();
+        // ====== SIMULAÇÃO (REMOVER EM PRODUÇÃO) ======
+        console.log('Login simulado com sucesso!');
 
-        let errorMessage = 'Erro ao fazer login. Tente novamente.';
+        // Salvar usuário simulado
+        const mockUser = {
+            uid: 'mock-uid-12345',
+            email: 'usuario@exemplo.com',
+            displayName: 'Usuário Teste',
+            photoURL: 'https://via.placeholder.com/150',
+            emailVerified: true,
+            loginTime: new Date().toISOString()
+        };
 
-        // Mensagens de erro específicas
-        if (error.code === 'auth/popup-closed-by-user') {
-            errorMessage = 'Login cancelado. Tente novamente.';
-        } else if (error.code === 'auth/network-request-failed') {
-            errorMessage = 'Erro de conexão. Verifique sua internet.';
-        } else if (error.code === 'auth/unauthorized-domain') {
-            errorMessage = 'Domínio não autorizado. Configure o Firebase.';
-        } else if (error.message.includes('expirou') || error.message.includes('bloqueada')) {
-            errorMessage = error.message;
-        } else if (error.message) {
-            errorMessage = error.message;
-        }
+        localStorage.setItem('user', JSON.stringify(mockUser));
+        localStorage.setItem('isAuthenticated', 'true');
 
-        showError(errorMessage);
-    }
-}
+        alert('Login realizado! (Modo simulação)\n\nVocê será redirecionado para o hub.');
 
-// ============================================
-// VERIFICAR SE JÁ ESTÁ LOGADO
-// ============================================
+        // Verificar se há uma página para redirecionar após login
+        const redirectPath = localStorage.getItem('redirectAfterLogin');
+        localStorage.removeItem('redirectAfterLogin');
 
-function checkIfUserIsLoggedIn() {
-    showLoading();
-    btnText.textContent = 'Verificando...';
-
-    // Observar mudanças na autenticação
-    onAuthChanged(({ authenticated, user, error }) => {
-        if (authenticated && user) {
-            console.log('✅ Usuário já autenticado:', user.email);
-
-            showSuccess(`Bem-vindo de volta, ${user.nome}! 🎉`);
-
-            setTimeout(() => {
+        // Redirecionar para o hub ou página anterior
+        setTimeout(() => {
+            if (redirectPath && redirectPath !== '/login/login.html' && !redirectPath.includes('/login/login.html')) {
+                window.location.href = redirectPath;
+            } else {
                 const indexPath = getIndexPath();
                 console.log('Redirecionando para:', indexPath);
                 window.location.href = indexPath;
-            }, 1000);
-
-        } else if (error) {
-            console.error('❌ Erro ao verificar autenticação:', error);
-            hideLoading();
-
-            if (error.message) {
-                showError(error.message);
             }
-        } else {
-            console.log('ℹ️ Usuário não autenticado');
-            hideLoading();
+        }, 1000);
+
+    } catch (error) {
+        console.error('Erro no login:', error);
+
+        // Tratamento de erros específicos do Firebase
+        let errorMessage = 'Erro ao fazer login. Tente novamente.';
+
+        if (error.code === 'auth/popup-closed-by-user') {
+            errorMessage = 'Login cancelado. Por favor, tente novamente.';
+        } else if (error.code === 'auth/network-request-failed') {
+            errorMessage = 'Erro de conexão. Verifique sua internet.';
+        } else if (error.code === 'auth/unauthorized-domain') {
+            errorMessage = 'Domínio não autorizado. Configure o Firebase corretamente.';
         }
-    });
+
+        alert(errorMessage);
+
+    } finally {
+        loginBtn.classList.remove('loading');
+    }
 }
 
-// ============================================
-// ADICIONAR ANIMAÇÕES CSS
-// ============================================
+// Função para verificar se usuário já está logado
+function checkIfUserIsLoggedIn() {
+    const isAuthenticated = localStorage.getItem('isAuthenticated');
+    const user = localStorage.getItem('user');
 
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes slideDown {
-        from {
-            opacity: 0;
-            transform: translateX(-50%) translateY(-20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-    }
+    if (isAuthenticated === 'true' && user) {
+        try {
+            const userData = JSON.parse(user);
+            console.log('Usuário já logado:', userData);
 
-    @keyframes slideUp {
-        from {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-        to {
-            opacity: 0;
-            transform: translateX(-50%) translateY(-20px);
+            // Redirecionar para o hub se já estiver logado
+            const indexPath = getIndexPath();
+            console.log('Já autenticado. Redirecionando para:', indexPath);
+            window.location.href = indexPath;
+
+        } catch (error) {
+            console.error('Erro ao ler dados do usuário:', error);
+            localStorage.removeItem('user');
+            localStorage.removeItem('isAuthenticated');
         }
     }
-`;
-document.head.appendChild(style);
+}
 
-// ============================================
-// EVENT LISTENERS
-// ============================================
+// Event Listeners
+loginBtn.addEventListener('click', loginWithGoogle);
 
-loginBtn.addEventListener('click', handleLogin);
-
-// ============================================
-// INICIALIZAR
-// ============================================
-
+// Verificar login ao carregar a página
 window.addEventListener('load', checkIfUserIsLoggedIn);
 
-console.log('✅ Login script carregado (com autenticação real)');
+// Função para logout (útil para testes)
+window.logout = function() {
+    localStorage.removeItem('user');
+    localStorage.removeItem('isAuthenticated');
+    console.log('Logout realizado!');
+    alert('Você foi desconectado!');
+    window.location.reload();
+};
+
+// Para testar logout, abra o console e digite: logout()

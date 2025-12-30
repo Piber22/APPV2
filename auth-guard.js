@@ -1,30 +1,28 @@
-// ============================================
-// AUTH GUARD - PROTEÇÃO DE ROTAS (COM FIREBASE AUTH)
-// Substitui o auth-guard.js existente - VERSÃO CORRIGIDA
-// ============================================
+/**
+ * Auth Guard - Sistema de proteção de rotas
+ * Coloque este arquivo na raiz do projeto (/)
+ * Importe no início de cada página que precisa de autenticação
+ *
+ * Funciona tanto localmente quanto no GitHub Pages
+ */
 
-import { onAuthChanged } from './auth-service.js';
-
-// Promise para garantir que a autenticação está pronta
-let authReadyResolve;
-window.authReady = new Promise((resolve) => {
-    authReadyResolve = resolve;
-});
-
-// ============================================
-// FUNÇÕES DE NAVEGAÇÃO
-// ============================================
-
+// Função para obter o caminho base (para GitHub Pages)
 function getBasePath() {
     const currentPath = window.location.pathname;
+
+    // Detectar se está no GitHub Pages
+    // Ex: /APPV2/index.html → base = /APPV2
     const pathParts = currentPath.split('/').filter(part => part);
 
+    // Se tiver partes no caminho e não for apenas um arquivo
     if (pathParts.length > 0) {
+        // Remover o último item se for um arquivo
         const lastPart = pathParts[pathParts.length - 1];
         if (lastPart.includes('.html')) {
             pathParts.pop();
         }
 
+        // Reconstruir o base path
         if (pathParts.length > 0) {
             return '/' + pathParts[0];
         }
@@ -33,6 +31,7 @@ function getBasePath() {
     return '';
 }
 
+// Função para obter o caminho correto do login baseado na página atual
 function getLoginPath() {
     const currentPath = window.location.pathname;
     const basePath = getBasePath();
@@ -40,249 +39,101 @@ function getLoginPath() {
     console.log('Current path:', currentPath);
     console.log('Base path:', basePath);
 
+    // Se estiver no GitHub Pages
     if (basePath) {
+        // Se estiver na raiz ou no index.html
+        if (currentPath.endsWith('/') ||
+            currentPath.endsWith('/index.html') ||
+            currentPath === basePath + '/' ||
+            currentPath === basePath + '/index.html') {
+            return basePath + '/login/login.html';
+        }
+
+        // Se estiver em uma subpasta
         return basePath + '/login/login.html';
     }
 
+    // Se estiver local (file://)
+    // Se estiver na raiz ou no index.html
     if (currentPath.endsWith('/') || currentPath.endsWith('/index.html') || currentPath.endsWith('index.html')) {
         return 'login/login.html';
     }
 
+    // Se estiver em uma subpasta
     return '../login/login.html';
 }
 
-// ============================================
-// VERIFICAÇÃO DE AUTENTICAÇÃO
-// ============================================
-
-let authCheckInProgress = false;
-
+// Função para verificar autenticação
 function checkAuthentication() {
-    if (authCheckInProgress) {
-        console.log('⏳ Verificação de autenticação já em andamento...');
-        return;
+    const isAuthenticated = localStorage.getItem('isAuthenticated');
+    const user = localStorage.getItem('user');
+
+    // Se não estiver autenticado, redireciona para login
+    if (isAuthenticated !== 'true' || !user) {
+        console.warn('Usuário não autenticado. Redirecionando para login...');
+
+        // Salvar a página atual para redirecionar após login
+        const currentPath = window.location.pathname;
+        localStorage.setItem('redirectAfterLogin', currentPath);
+
+        // Redirecionar para login com caminho correto
+        const loginPath = getLoginPath();
+        console.log('Redirecionando para:', loginPath);
+        window.location.href = loginPath;
+        return false;
     }
 
-    authCheckInProgress = true;
+    try {
+        const userData = JSON.parse(user);
+        console.log('Usuário autenticado:', userData.displayName || userData.email);
+        return true;
+    } catch (error) {
+        console.error('Erro ao verificar autenticação:', error);
+        localStorage.removeItem('user');
+        localStorage.removeItem('isAuthenticated');
+        window.location.href = getLoginPath();
+        return false;
+    }
+}
 
-    console.log('🔐 Verificando autenticação...');
-
-    // Mostrar loading
-    showAuthLoading();
-
-    // Observar estado de autenticação
-    onAuthChanged(({ authenticated, user, error }) => {
-        authCheckInProgress = false;
-        hideAuthLoading();
-
-        if (authenticated && user) {
-            console.log('✅ Usuário autenticado:', user.email);
-            console.log('📋 Plano:', user.plano);
-            console.log('📅 Validade:', user.validade);
-            console.log('🟢 Status:', user.status);
-
-            // Atualizar informações do usuário na interface (se houver)
-            updateUserUI(user);
-
-            // ✅ RESOLVER A PROMISE - AUTENTICAÇÃO PRONTA!
-            if (authReadyResolve) {
-                authReadyResolve(user);
-                authReadyResolve = null; // Só resolve uma vez
-            }
-
-        } else if (error) {
-            console.error('❌ Erro na autenticação:', error);
-            redirectToLogin('Erro ao verificar autenticação');
-
-        } else {
-            console.warn('⚠️ Usuário não autenticado');
-            redirectToLogin('Você precisa fazer login');
+// Função para obter dados do usuário atual
+function getCurrentUser() {
+    const user = localStorage.getItem('user');
+    if (user) {
+        try {
+            return JSON.parse(user);
+        } catch (error) {
+            console.error('Erro ao obter dados do usuário:', error);
+            return null;
         }
-    });
-}
-
-function redirectToLogin(message) {
-    console.warn('🔄 Redirecionando para login:', message);
-
-    // Salvar a página atual para redirecionar após login
-    const currentPath = window.location.pathname;
-    localStorage.setItem('redirectAfterLogin', currentPath);
-
-    // Redirecionar para login
-    const loginPath = getLoginPath();
-    console.log('➡️ Redirecionando para:', loginPath);
-    window.location.href = loginPath;
-}
-
-// ============================================
-// UI DE LOADING
-// ============================================
-
-function showAuthLoading() {
-    if (document.getElementById('authLoadingOverlay')) return;
-
-    const overlay = document.createElement('div');
-    overlay.id = 'authLoadingOverlay';
-    overlay.style.cssText = `
-        position: fixed;
-        inset: 0;
-        background: rgba(255, 245, 247, 0.95);
-        backdrop-filter: blur(8px);
-        z-index: 999999;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        animation: fadeIn 0.3s ease;
-    `;
-
-    overlay.innerHTML = `
-        <div style="text-align: center;">
-            <div style="
-                width: 50px;
-                height: 50px;
-                border: 4px solid #fce7f3;
-                border-top-color: #ec4899;
-                border-radius: 50%;
-                margin: 0 auto 20px;
-                animation: spin 1s linear infinite;
-            "></div>
-            <p style="
-                font-family: 'Nunito', sans-serif;
-                font-size: 16px;
-                font-weight: 600;
-                color: #ec4899;
-                margin: 0;
-            ">Verificando autenticação...</p>
-        </div>
-    `;
-
-    // Adicionar animações
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-    `;
-    overlay.appendChild(style);
-
-    document.body.appendChild(overlay);
-}
-
-function hideAuthLoading() {
-    const overlay = document.getElementById('authLoadingOverlay');
-    if (overlay) {
-        overlay.style.animation = 'fadeOut 0.3s ease';
-        setTimeout(() => overlay.remove(), 300);
     }
+    return null;
 }
 
-// ============================================
-// ATUALIZAR INFORMAÇÕES DO USUÁRIO NA UI
-// ============================================
-
-function updateUserUI(user) {
-    // Atualizar nome do usuário (se houver elemento)
-    const userNameElement = document.getElementById('user-name');
-    if (userNameElement) {
-        userNameElement.textContent = user.nome || user.email;
-    }
-
-    // Atualizar avatar (se houver elemento)
-    const userAvatarElement = document.getElementById('user-avatar');
-    if (userAvatarElement && user.photoURL) {
-        userAvatarElement.src = user.photoURL;
-    }
-
-    // Mostrar informações do usuário (se houver container)
-    const userInfoContainer = document.getElementById('user-info');
-    if (userInfoContainer) {
-        userInfoContainer.style.display = 'block';
-    }
-
-    // Mostrar badge do plano (se trial)
-    if (user.plano === 'trial') {
-        showTrialBadge(user.validade);
-    }
-}
-
-function showTrialBadge(validade) {
-    const validadeDate = new Date(validade);
-    const now = new Date();
-    const daysRemaining = Math.ceil((validadeDate - now) / (1000 * 60 * 60 * 24));
-
-    if (daysRemaining <= 0) return;
-
-    const badge = document.createElement('div');
-    badge.style.cssText = `
-        position: fixed;
-        top: 70px;
-        right: 20px;
-        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-        color: #92400e;
-        padding: 8px 16px;
-        border-radius: 50px;
-        font-size: 12px;
-        font-weight: 700;
-        box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
-        z-index: 1000;
-        animation: slideIn 0.5s ease;
-    `;
-    badge.innerHTML = `
-        <i class="fas fa-clock" style="margin-right: 6px;"></i>
-        Trial: ${daysRemaining} ${daysRemaining === 1 ? 'dia' : 'dias'} restantes
-    `;
-
-    document.body.appendChild(badge);
-}
-
-// ============================================
-// FUNÇÃO DE LOGOUT
-// ============================================
-
-async function logout() {
+// Função para fazer logout
+function logout() {
     const confirmLogout = confirm('Deseja realmente sair?');
 
     if (confirmLogout) {
-        try {
-            // Importar dinamicamente para evitar erro se não estiver disponível
-            const { logout: firebaseLogout } = await import('./auth-service.js');
-            await firebaseLogout();
+        localStorage.removeItem('user');
+        localStorage.removeItem('isAuthenticated');
+        localStorage.removeItem('redirectAfterLogin');
 
-            console.log('✅ Logout realizado com sucesso!');
+        console.log('Logout realizado com sucesso!');
 
-            // Redirecionar para login
-            const loginPath = getLoginPath();
-            console.log('Logout - Redirecionando para:', loginPath);
-            window.location.href = loginPath;
-
-        } catch (error) {
-            console.error('❌ Erro no logout:', error);
-            alert('Erro ao fazer logout. Tente novamente.');
-        }
+        // Redirecionar para login com caminho correto
+        const loginPath = getLoginPath();
+        console.log('Logout - Redirecionando para:', loginPath);
+        window.location.href = loginPath;
     }
 }
-
-// ============================================
-// EXPORTAR FUNÇÕES PARA USO GLOBAL
-// ============================================
-
-window.authGuard = {
-    checkAuth: checkAuthentication,
-    logout: logout,
-    // Nova função: aguardar autenticação estar pronta
-    waitForAuth: () => window.authReady
-};
-
-// ============================================
-// INICIALIZAR
-// ============================================
 
 // Verificar autenticação ao carregar a página
 checkAuthentication();
 
-console.log('✅ Auth Guard carregado (com Firebase Auth)');
+// Exportar funções para uso global
+window.authGuard = {
+    checkAuth: checkAuthentication,
+    getCurrentUser: getCurrentUser,
+    logout: logout
+};
