@@ -116,18 +116,27 @@
         <button id="dismiss-button" style="background: #f3f4f6; color: #6b7280; border: none; padding: 10px 20px; border-radius: 12px; font-weight: 600; cursor: pointer; margin-left: 8px; font-size: 14px;">Agora não</button>
     </div>
 
-    <script>
-        // Exibir informações do usuário
-        window.addEventListener('load', () => {
-            const user = window.authGuard.getCurrentUser();
-            if (user) {
-                const userInfo = document.getElementById('user-info');
-                const userName = document.getElementById('user-name');
-                userName.textContent = user.displayName || user.email;
-                userInfo.style.display = 'block';
-            }
-        });
-    </script>
+    <script type="module">
+    import { getCurrentUser } from './auth-service.js';
+
+    // Aguardar autenticação estar pronta
+    async function updateUserInfo() {
+        if (window.authReady) {
+            await window.authReady;
+        }
+
+        const user = getCurrentUser();
+        if (user) {
+            const userInfo = document.getElementById('user-info');
+            const userName = document.getElementById('user-name');
+            userName.textContent = user.displayName || user.nome || user.email;
+            userInfo.style.display = 'block';
+        }
+    }
+
+    // Executar quando a página carregar
+    window.addEventListener('load', updateUserInfo);
+</script>
 
     <script>
         // Registro do Service Worker

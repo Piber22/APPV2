@@ -1,5 +1,5 @@
 // ============================================
-// FIREBASE INTEGRATION - CALENDARIO (COM DADOS POR USUÁRIO)
+// FIREBASE INTEGRATION - CALENDARIO (CORRIGIDO)
 // Substitui o firebase-calendario.js existente em /calendario/
 // ============================================
 
@@ -12,17 +12,28 @@ import {
 import { getCurrentUser } from '../auth-service.js';
 
 // ============================================
+// AGUARDAR AUTENTICAÇÃO ESTAR PRONTA
+// ============================================
+
+async function waitForAuth() {
+    if (window.authReady) {
+        await window.authReady;
+    }
+}
+
+// ============================================
 // FIREBASE ORDERS API
-// Mantém a mesma interface, mas usa dados por usuário
 // ============================================
 
 window.FirebaseOrders = {
-    // Collection name (mantido para compatibilidade)
     COLLECTION: 'orders',
 
-    // Load all orders from Firebase (do usuário atual)
+    // Load all orders
     async loadOrders() {
         try {
+            // ✅ AGUARDAR AUTENTICAÇÃO
+            await waitForAuth();
+
             console.log('📦 Carregando encomendas do usuário...');
 
             const user = getCurrentUser();
@@ -41,29 +52,25 @@ window.FirebaseOrders = {
         }
     },
 
-    // Save order (create or update) - do usuário atual
+    // Save order
     async saveOrder(orderData) {
         try {
+            // ✅ AGUARDAR AUTENTICAÇÃO
+            await waitForAuth();
+
             const user = getCurrentUser();
             if (!user) {
                 throw new Error('Usuário não autenticado');
             }
 
             if (orderData.id) {
-                // Update existing order
                 console.log('📝 Atualizando encomenda:', orderData.id);
-
                 const orderId = await saveUserOrder(orderData);
-
                 console.log('✅ Encomenda atualizada com sucesso');
                 return orderId;
-
             } else {
-                // Create new order
                 console.log('➕ Criando nova encomenda');
-
                 const orderId = await saveUserOrder(orderData);
-
                 console.log('✅ Encomenda criada com sucesso:', orderId);
                 return orderId;
             }
@@ -74,18 +81,19 @@ window.FirebaseOrders = {
         }
     },
 
-    // Remove order - do usuário atual
+    // Remove order
     async removeOrder(orderId) {
         try {
+            // ✅ AGUARDAR AUTENTICAÇÃO
+            await waitForAuth();
+
             const user = getCurrentUser();
             if (!user) {
                 throw new Error('Usuário não autenticado');
             }
 
             console.log('🗑️ Excluindo encomenda:', orderId);
-
             await deleteUserOrder(orderId);
-
             console.log('✅ Encomenda excluída');
 
         } catch (error) {
@@ -94,9 +102,12 @@ window.FirebaseOrders = {
         }
     },
 
-    // Setup realtime listener - para as encomendas do usuário atual
-    setupRealtimeOrders(callback) {
+    // Setup realtime listener
+    async setupRealtimeOrders(callback) {
         try {
+            // ✅ AGUARDAR AUTENTICAÇÃO
+            await waitForAuth();
+
             const user = getCurrentUser();
             if (!user) {
                 throw new Error('Usuário não autenticado');
@@ -164,7 +175,6 @@ window.FirebaseOrders = {
                 </div>
             `;
 
-            // Add spin animation
             const style = document.createElement('style');
             style.textContent = `
                 @keyframes spin {
@@ -180,7 +190,6 @@ window.FirebaseOrders = {
         }
     },
 
-    // UI Helper: Hide loading overlay
     hideLoading() {
         const overlay = document.getElementById('loadingOverlay');
         if (overlay) {
@@ -188,7 +197,6 @@ window.FirebaseOrders = {
         }
     },
 
-    // UI Helper: Show error message
     showError(message) {
         const toast = document.createElement('div');
         toast.style.cssText = `
@@ -207,7 +215,6 @@ window.FirebaseOrders = {
         `;
         toast.textContent = message;
 
-        // Add animation
         const style = document.createElement('style');
         style.textContent = `
             @keyframes slideDown {

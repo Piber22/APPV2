@@ -1,9 +1,15 @@
 // ============================================
 // AUTH GUARD - PROTEÇÃO DE ROTAS (COM FIREBASE AUTH)
-// Substitui o auth-guard.js existente
+// Substitui o auth-guard.js existente - VERSÃO CORRIGIDA
 // ============================================
 
 import { onAuthChanged } from './auth-service.js';
+
+// Promise para garantir que a autenticação está pronta
+let authReadyResolve;
+window.authReady = new Promise((resolve) => {
+    authReadyResolve = resolve;
+});
 
 // ============================================
 // FUNÇÕES DE NAVEGAÇÃO
@@ -77,6 +83,12 @@ function checkAuthentication() {
 
             // Atualizar informações do usuário na interface (se houver)
             updateUserUI(user);
+
+            // ✅ RESOLVER A PROMISE - AUTENTICAÇÃO PRONTA!
+            if (authReadyResolve) {
+                authReadyResolve(user);
+                authReadyResolve = null; // Só resolve uma vez
+            }
 
         } else if (error) {
             console.error('❌ Erro na autenticação:', error);
@@ -261,7 +273,9 @@ async function logout() {
 
 window.authGuard = {
     checkAuth: checkAuthentication,
-    logout: logout
+    logout: logout,
+    // Nova função: aguardar autenticação estar pronta
+    waitForAuth: () => window.authReady
 };
 
 // ============================================

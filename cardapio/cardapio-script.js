@@ -1,7 +1,6 @@
 // ============================================
-// CARDÁPIO PÚBLICO - FIREBASE (COM DADOS POR USUÁRIO)
+// CARDÁPIO PÚBLICO - FIREBASE (CORRIGIDO)
 // Substitui o cardapio-script.js existente em /cardapio/
-// Sincronização automática em tempo real
 // ============================================
 
 import { watchUserMenu } from '../user-data-service.js';
@@ -17,38 +16,57 @@ let menuData = {
 let unsubscribe = null;
 
 // ============================================
+// AGUARDAR AUTENTICAÇÃO ESTAR PRONTA
+// ============================================
+
+async function waitForAuth() {
+    if (window.authReady) {
+        await window.authReady;
+    }
+}
+
+// ============================================
 // SETUP SINCRONIZAÇÃO EM TEMPO REAL
 // ============================================
 
-function setupRealtimeMenu() {
-    console.log('🔄 Configurando sincronização em tempo real...');
+async function setupRealtimeMenu() {
+    try {
+        // ✅ AGUARDAR AUTENTICAÇÃO
+        await waitForAuth();
 
-    const user = getCurrentUser();
-    if (!user) {
-        console.error('❌ Usuário não autenticado');
-        showError('Você precisa fazer login para ver o cardápio');
-        return;
-    }
+        console.log('🔄 Configurando sincronização em tempo real...');
 
-    console.log('👤 Carregando cardápio de:', user.email);
+        const user = getCurrentUser();
+        if (!user) {
+            console.error('❌ Usuário não autenticado');
+            showError('Você precisa fazer login para ver o cardápio');
+            return;
+        }
 
-    unsubscribe = watchUserMenu((data) => {
-        console.log('✅ Dados recebidos:', {
-            usuário: user.email,
-            categorias: data.categories?.length || 0,
-            itens: data.items?.length || 0,
-            lastModified: data.lastModified
+        console.log('👤 Carregando cardápio de:', user.email);
+
+        unsubscribe = watchUserMenu((data) => {
+            console.log('✅ Dados recebidos:', {
+                usuário: user.email,
+                categorias: data.categories?.length || 0,
+                itens: data.items?.length || 0,
+                lastModified: data.lastModified
+            });
+
+            menuData.settings = data.settings || {};
+            menuData.categories = data.categories || [];
+            menuData.items = data.items || [];
+
+            renderMenu();
+            showMenu();
+
+            console.log('🔔 Cardápio atualizado em tempo real!');
         });
 
-        menuData.settings = data.settings || {};
-        menuData.categories = data.categories || [];
-        menuData.items = data.items || [];
-
-        renderMenu();
-        showMenu();
-
-        console.log('🔔 Cardápio atualizado em tempo real!');
-    });
+    } catch (error) {
+        console.error('❌ Erro ao configurar sincronização:', error);
+        showError('Erro ao carregar cardápio');
+    }
 }
 
 // ============================================
@@ -197,31 +215,32 @@ async function init() {
     console.log('═══════════════════════════════════════');
     console.log('🍰 CARDÁPIO PÚBLICO - FIREBASE');
     console.log('═══════════════════════════════════════');
-
-    const user = getCurrentUser();
-
     console.log('📅 Data/Hora:', new Date().toLocaleString());
     console.log('🌐 Online:', navigator.onLine);
-    console.log('👤 Usuário:', user ? user.email : 'Não autenticado');
     console.log('═══════════════════════════════════════');
 
     showLoading();
 
     try {
-        // Verificar se está autenticado
+        // ✅ AGUARDAR AUTENTICAÇÃO PRIMEIRO
+        await waitForAuth();
+
+        const user = getCurrentUser();
+
         if (!user) {
             console.error('❌ Usuário não autenticado');
             showError('Você precisa fazer login para visualizar o cardápio');
 
-            // Redirecionar para login após 2 segundos
             setTimeout(() => {
                 window.location.href = '../login/login.html';
             }, 2000);
             return;
         }
 
+        console.log('👤 Usuário:', user.email);
+
         // Configurar listener de tempo real
-        setupRealtimeMenu();
+        await setupRealtimeMenu();
 
         console.log('✨ Cardápio iniciado com sucesso!');
         console.log('🔄 Sincronização em tempo real ATIVA');

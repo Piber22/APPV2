@@ -1,13 +1,12 @@
 // ============================================
-// ORÇAMENTOS - FIREBASE (COM DADOS POR USUÁRIO)
+// ORÇAMENTOS - FIREBASE (CORRIGIDO)
 // Substitui o orcamento-firebase.js existente em /orcamento/
-// Sincronização automática em tempo real
 // ============================================
 
 import { watchUserMenu } from '../user-data-service.js';
 import { getCurrentUser } from '../auth-service.js';
 
-// State global (será usado pelo orcamento-script.js)
+// State global
 window.state = {
     settings: {},
     categories: [],
@@ -17,40 +16,59 @@ window.state = {
 let unsubscribe = null;
 
 // ============================================
+// AGUARDAR AUTENTICAÇÃO ESTAR PRONTA
+// ============================================
+
+async function waitForAuth() {
+    if (window.authReady) {
+        await window.authReady;
+    }
+}
+
+// ============================================
 // SETUP SINCRONIZAÇÃO EM TEMPO REAL
 // ============================================
 
-function setupRealtimeMenu() {
-    console.log('🔄 Configurando sincronização em tempo real...');
+async function setupRealtimeMenu() {
+    try {
+        // ✅ AGUARDAR AUTENTICAÇÃO
+        await waitForAuth();
 
-    const user = getCurrentUser();
-    if (!user) {
-        console.error('❌ Usuário não autenticado');
-        showError('Você precisa fazer login para criar orçamentos');
-        return;
-    }
+        console.log('🔄 Configurando sincronização em tempo real...');
 
-    console.log('👤 Carregando cardápio de:', user.email);
-
-    unsubscribe = watchUserMenu((data) => {
-        console.log('✅ Dados recebidos:', {
-            usuário: user.email,
-            categorias: data.categories?.length || 0,
-            itens: data.items?.length || 0,
-            lastModified: data.lastModified
-        });
-
-        window.state.settings = data.settings || {};
-        window.state.categories = data.categories || [];
-        window.state.menuItems = data.items || [];
-
-        // Notificar que os dados foram atualizados
-        if (typeof window.onMenuDataLoaded === 'function') {
-            window.onMenuDataLoaded();
+        const user = getCurrentUser();
+        if (!user) {
+            console.error('❌ Usuário não autenticado');
+            showError('Você precisa fazer login para criar orçamentos');
+            return;
         }
 
-        console.log('🔔 Cardápio atualizado em tempo real!');
-    });
+        console.log('👤 Carregando cardápio de:', user.email);
+
+        unsubscribe = watchUserMenu((data) => {
+            console.log('✅ Dados recebidos:', {
+                usuário: user.email,
+                categorias: data.categories?.length || 0,
+                itens: data.items?.length || 0,
+                lastModified: data.lastModified
+            });
+
+            window.state.settings = data.settings || {};
+            window.state.categories = data.categories || [];
+            window.state.menuItems = data.items || [];
+
+            // Notificar que os dados foram atualizados
+            if (typeof window.onMenuDataLoaded === 'function') {
+                window.onMenuDataLoaded();
+            }
+
+            console.log('🔔 Cardápio atualizado em tempo real!');
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao configurar sincronização:', error);
+        showError('Erro ao carregar cardápio');
+    }
 }
 
 // ============================================
@@ -82,7 +100,6 @@ function showError(message) {
     console.error('❌', message);
     hideLoading();
 
-    // Mostrar mensagem de erro
     const errorDiv = document.createElement('div');
     errorDiv.style.cssText = `
         position: fixed;
@@ -115,7 +132,6 @@ function showError(message) {
     `;
     document.body.appendChild(errorDiv);
 
-    // Mostrar o container principal com opacidade
     const mainContainer = document.querySelector('.main-container');
     if (mainContainer) {
         mainContainer.style.opacity = '0.3';
@@ -130,26 +146,28 @@ async function initializeFirebase() {
     console.log('═══════════════════════════════════════');
     console.log('🍰 ORÇAMENTOS - FIREBASE');
     console.log('═══════════════════════════════════════');
-
-    const user = getCurrentUser();
-
     console.log('📅 Data/Hora:', new Date().toLocaleString());
     console.log('🌐 Online:', navigator.onLine);
-    console.log('👤 Usuário:', user ? user.email : 'Não autenticado');
     console.log('═══════════════════════════════════════');
 
     showLoading();
 
     try {
-        // Verificar se está autenticado
+        // ✅ AGUARDAR AUTENTICAÇÃO PRIMEIRO
+        await waitForAuth();
+
+        const user = getCurrentUser();
+
         if (!user) {
             console.error('❌ Usuário não autenticado');
             showError('Você precisa fazer login para criar orçamentos');
             return;
         }
 
+        console.log('👤 Usuário:', user.email);
+
         // Configurar listener de tempo real
-        setupRealtimeMenu();
+        await setupRealtimeMenu();
 
         console.log('✨ Sistema iniciado com sucesso!');
         console.log('🔄 Sincronização em tempo real ATIVA');
