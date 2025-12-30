@@ -1,28 +1,15 @@
 // ============================================
-// FIREBASE INTEGRATION - DOCE GESTÃO
-// Sincronização em tempo real e offline-first
+// FIREBASE INTEGRATION - DOCE GESTÃO (COM DADOS POR USUÁRIO)
+// Substitui o firebase-integration.js existente em /editarcardapio/
 // ============================================
 
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getFirestore, doc, setDoc, getDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-
-// Configuração do Firebase
-const firebaseConfig = {
-  apiKey: "AIzaSyBLhKaigyOT9dCAd9iA1o5j18rFB4rQ5uo",
-  authDomain: "doce-gestao-4b032.firebaseapp.com",
-  projectId: "doce-gestao-4b032",
-  storageBucket: "doce-gestao-4b032.firebasestorage.app",
-  messagingSenderId: "318295225306",
-  appId: "1:318295225306:web:3beaebbb5979edba6686e3"
-};
-
-// Inicializar Firebase
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-// Referência ao documento (você pode mudar 'default' para ter múltiplos usuários)
-const MENU_DOC_ID = 'default';
-const menuDocRef = doc(db, 'menu', MENU_DOC_ID);
+import {
+    loadUserMenu,
+    saveUserMenu,
+    watchUserMenu,
+    migrateOldData
+} from '../user-data-service.js';
+import { getCurrentUser } from '../auth-service.js';
 
 // Estado de sincronização
 let syncStatus = {
@@ -47,6 +34,12 @@ async function saveToFirebase() {
         return;
     }
 
+    const user = getCurrentUser();
+    if (!user) {
+        console.error('❌ Usuário não autenticado');
+        return;
+    }
+
     try {
         syncStatus.isSyncing = true;
         console.log('💾 Salvando no Firebase...');
@@ -54,18 +47,17 @@ async function saveToFirebase() {
         const dataToSave = {
             settings: state.settings,
             categories: state.categories,
-            items: state.items,
-            lastModified: new Date().toISOString(),
-            version: 1
+            items: state.items
         };
 
         console.log('📤 Dados a serem salvos:', {
+            usuário: user.email,
             categorias: dataToSave.categories.length,
             itens: dataToSave.items.length,
-            timestamp: dataToSave.lastModified
+            timestamp: new Date().toISOString()
         });
 
-        await setDoc(menuDocRef, dataToSave);
+        await saveUserMenu(dataToSave);
 
         syncStatus.lastSaved = new Date();
         syncStatus.hasUnsavedChanges = false;
@@ -74,8 +66,10 @@ async function saveToFirebase() {
 
     } catch (error) {
         console.error('❌ Erro ao salvar no Firebase:', error);
-        console.error('Stack trace:', error.stack);
         syncStatus.hasUnsavedChanges = true;
+
+        // Mostrar mensagem de erro ao usuário
+        showError('Erro ao salvar. Suas alterações não foram salvas.');
 
     } finally {
         syncStatus.isSyncing = false;
@@ -89,38 +83,33 @@ async function saveToFirebase() {
 async function loadFromFirebase() {
     console.log('☁️ Carregando dados do Firebase...');
 
+    const user = getCurrentUser();
+    if (!user) {
+        console.error('❌ Usuário não autenticado');
+        return;
+    }
+
     try {
-        const docSnap = await getDoc(menuDocRef);
+        const data = await loadUserMenu();
 
-        if (docSnap.exists()) {
-            const data = docSnap.data();
+        console.log('✅ Dados recebidos do Firebase:', {
+            usuário: user.email,
+            categorias: data.categories?.length || 0,
+            itens: data.items?.length || 0,
+            lastModified: data.lastModified
+        });
 
-            console.log('✅ Dados recebidos do Firebase:', {
-                categorias: data.categories?.length || 0,
-                itens: data.items?.length || 0,
-                lastModified: data.lastModified
-            });
+        // Atualizar estado
+        if (data.settings) state.settings = data.settings;
+        if (data.categories) state.categories = data.categories;
+        if (data.items) state.items = data.items;
 
-            // Atualizar estado
-            if (data.settings) state.settings = data.settings;
-            if (data.categories) state.categories = data.categories;
-            if (data.items) state.items = data.items;
-
-            updateUI();
-            syncStatus.lastLoaded = new Date();
-            console.log('✅ Interface atualizada com sucesso');
-
-        } else {
-            console.log('ℹ️ Documento não existe ainda, criando com dados padrão...');
-
-            // Salvar dados iniciais
-            await saveToFirebase();
-            console.log('✅ Dados iniciais salvos no Firebase');
-        }
+        updateUI();
+        syncStatus.lastLoaded = new Date();
+        console.log('✅ Interface atualizada com sucesso');
 
     } catch (error) {
         console.error('❌ Erro ao carregar do Firebase:', error);
-        console.error('Stack trace:', error.stack);
         throw error;
     }
 }
@@ -132,47 +121,47 @@ async function loadFromFirebase() {
 function setupRealtimeSync() {
     console.log('🔄 Configurando sincronização em tempo real...');
 
-    // Escutar mudanças no documento
-    unsubscribeSnapshot = onSnapshot(menuDocRef, (doc) => {
+    const user = getCurrentUser();
+    if (!user) {
+        console.error('❌ Usuário não autenticado');
+        return;
+    }
+
+    // Escutar mudanças no menu do usuário
+    unsubscribeSnapshot = watchUserMenu((data) => {
         // Ignorar a primeira chamada (que é o load inicial)
         if (!syncStatus.isInitialized) {
             syncStatus.isInitialized = true;
-            console.log('✅ Listener de tempo real ativado');
+            console.log('✅ Listener de tempo real ativado para:', user.email);
             return;
         }
 
         // Ignorar se estamos salvando (para evitar loop)
         if (syncStatus.isSyncing) {
-            console.log('⏭️ Ignorando update (salvando no momento)');
+            console.log('⭐ Ignorando update (salvando no momento)');
             return;
         }
 
         // Ignorar se temos mudanças não salvas
         if (syncStatus.hasUnsavedChanges) {
-            console.log('⏭️ Ignorando update (há mudanças locais não salvas)');
+            console.log('⭐ Ignorando update (há mudanças locais não salvas)');
             return;
         }
 
-        if (doc.exists()) {
-            const data = doc.data();
+        console.log('🔔 Atualização recebida em tempo real!');
+        console.log('📥 Novos dados:', {
+            categorias: data.categories?.length || 0,
+            itens: data.items?.length || 0,
+            lastModified: data.lastModified
+        });
 
-            console.log('🔔 Atualização recebida em tempo real!');
-            console.log('📥 Novos dados:', {
-                categorias: data.categories?.length || 0,
-                itens: data.items?.length || 0,
-                lastModified: data.lastModified
-            });
+        // Atualizar estado
+        if (data.settings) state.settings = data.settings;
+        if (data.categories) state.categories = data.categories;
+        if (data.items) state.items = data.items;
 
-            // Atualizar estado
-            if (data.settings) state.settings = data.settings;
-            if (data.categories) state.categories = data.categories;
-            if (data.items) state.items = data.items;
-
-            updateUI();
-            console.log('✅ Interface atualizada com dados do servidor');
-        }
-    }, (error) => {
-        console.error('❌ Erro no listener de tempo real:', error);
+        updateUI();
+        console.log('✅ Interface atualizada com dados do servidor');
     });
 }
 
@@ -243,6 +232,32 @@ function hideLoading() {
     }
 }
 
+function showError(message) {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #ef4444;
+        color: white;
+        padding: 16px 24px;
+        border-radius: 12px;
+        font-weight: 600;
+        z-index: 10000;
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        animation: slideDown 0.3s;
+    `;
+    toast.textContent = message;
+
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.animation = 'slideDown 0.3s reverse';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 // ============================================
 // INICIALIZAÇÃO
 // ============================================
@@ -251,14 +266,25 @@ async function initializeFirebaseIntegration() {
     console.log('═══════════════════════════════════════');
     console.log('🚀 INICIANDO DOCE GESTÃO - FIREBASE');
     console.log('═══════════════════════════════════════');
+
+    const user = getCurrentUser();
+    if (!user) {
+        console.error('❌ Usuário não autenticado');
+        window.location.href = '../login/login.html';
+        return;
+    }
+
+    console.log('👤 Usuário:', user.email);
     console.log('📅 Data/Hora:', new Date().toLocaleString());
     console.log('🌐 Online:', navigator.onLine);
-    console.log('📱 User Agent:', navigator.userAgent);
     console.log('═══════════════════════════════════════');
 
     showLoading();
 
     try {
+        // Tentar migrar dados antigos (se houver)
+        await migrateOldData();
+
         // Carregar dados do Firebase
         console.log('☁️ Carregando dados do Firebase...');
         await loadFromFirebase();
@@ -294,7 +320,7 @@ async function initializeFirebaseIntegration() {
 
         if (navigator.onLine) {
             setTimeout(() => {
-                alert('⚠️ Não foi possível conectar ao Firebase.\n\nVerifique sua conexão e recarregue a página.');
+                showError('Erro ao carregar dados. Tente recarregar a página.');
             }, 500);
         }
     }
@@ -309,7 +335,7 @@ function setupEventListeners() {
         const element = document.getElementById(id);
         if (element) {
             element.addEventListener('input', () => {
-                console.log('📝 Campo alterado:', id);
+                console.log('🖊️ Campo alterado:', id);
                 scheduleAutoSave();
             });
         }

@@ -1,72 +1,38 @@
 // ============================================
-// FIREBASE INTEGRATION - CALENDARIO
+// FIREBASE INTEGRATION - CALENDARIO (COM DADOS POR USUÁRIO)
+// Substitui o firebase-calendario.js existente em /calendario/
 // ============================================
 
-// Import Firebase modules
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import {
-    getFirestore,
-    collection,
-    addDoc,
-    updateDoc,
-    deleteDoc,
-    doc,
-    getDocs,
-    onSnapshot,
-    query,
-    orderBy,
-    Timestamp
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-// ============================================
-// FIREBASE CONFIGURATION
-// ⭐ USANDO O MESMO PROJETO QUE FUNCIONA
-// ============================================
-
-const firebaseConfig = {
-    apiKey: "AIzaSyBLhKaigyOT9dCAd9iA1o5j18rFB4rQ5uo",
-    authDomain: "doce-gestao-4b032.firebaseapp.com",
-    projectId: "doce-gestao-4b032",
-    storageBucket: "doce-gestao-4b032.firebasestorage.app",
-    messagingSenderId: "318295225306",
-    appId: "1:318295225306:web:3beaebbb5979edba6686e3"
-};
-
-// Initialize Firebase
-console.log('🔥 Inicializando Firebase...');
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-console.log('✅ Firebase inicializado com sucesso');
+    loadUserOrders,
+    saveUserOrder,
+    deleteUserOrder,
+    watchUserOrders
+} from '../user-data-service.js';
+import { getCurrentUser } from '../auth-service.js';
 
 // ============================================
 // FIREBASE ORDERS API
+// Mantém a mesma interface, mas usa dados por usuário
 // ============================================
 
 window.FirebaseOrders = {
-    // Collection name
+    // Collection name (mantido para compatibilidade)
     COLLECTION: 'orders',
 
-    // Load all orders from Firebase
+    // Load all orders from Firebase (do usuário atual)
     async loadOrders() {
         try {
-            console.log('📦 Carregando encomendas do Firebase...');
+            console.log('📦 Carregando encomendas do usuário...');
 
-            const q = query(
-                collection(db, this.COLLECTION),
-                orderBy('date', 'asc')
-            );
+            const user = getCurrentUser();
+            if (!user) {
+                throw new Error('Usuário não autenticado');
+            }
 
-            const querySnapshot = await getDocs(q);
-            const orders = [];
+            const orders = await loadUserOrders();
 
-            querySnapshot.forEach((doc) => {
-                orders.push({
-                    id: doc.id,
-                    ...doc.data()
-                });
-            });
-
-            console.log(`✅ ${orders.length} encomendas carregadas`);
+            console.log(`✅ ${orders.length} encomendas carregadas para ${user.email}`);
             return orders;
 
         } catch (error) {
@@ -75,36 +41,31 @@ window.FirebaseOrders = {
         }
     },
 
-    // Save order (create or update)
+    // Save order (create or update) - do usuário atual
     async saveOrder(orderData) {
         try {
+            const user = getCurrentUser();
+            if (!user) {
+                throw new Error('Usuário não autenticado');
+            }
+
             if (orderData.id) {
                 // Update existing order
                 console.log('📝 Atualizando encomenda:', orderData.id);
 
-                const orderRef = doc(db, this.COLLECTION, orderData.id);
-                const { id, createdAt, ...dataToUpdate } = orderData;
-
-                await updateDoc(orderRef, {
-                    ...dataToUpdate,
-                    updatedAt: Timestamp.now()
-                });
+                const orderId = await saveUserOrder(orderData);
 
                 console.log('✅ Encomenda atualizada com sucesso');
-                return orderData.id;
+                return orderId;
 
             } else {
                 // Create new order
                 console.log('➕ Criando nova encomenda');
 
-                const docRef = await addDoc(collection(db, this.COLLECTION), {
-                    ...orderData,
-                    createdAt: Timestamp.now(),
-                    updatedAt: Timestamp.now()
-                });
+                const orderId = await saveUserOrder(orderData);
 
-                console.log('✅ Encomenda criada com sucesso:', docRef.id);
-                return docRef.id;
+                console.log('✅ Encomenda criada com sucesso:', orderId);
+                return orderId;
             }
 
         } catch (error) {
@@ -113,12 +74,17 @@ window.FirebaseOrders = {
         }
     },
 
-    // Remove order
+    // Remove order - do usuário atual
     async removeOrder(orderId) {
         try {
+            const user = getCurrentUser();
+            if (!user) {
+                throw new Error('Usuário não autenticado');
+            }
+
             console.log('🗑️ Excluindo encomenda:', orderId);
 
-            await deleteDoc(doc(db, this.COLLECTION, orderId));
+            await deleteUserOrder(orderId);
 
             console.log('✅ Encomenda excluída');
 
@@ -128,34 +94,21 @@ window.FirebaseOrders = {
         }
     },
 
-    // Setup realtime listener
+    // Setup realtime listener - para as encomendas do usuário atual
     setupRealtimeOrders(callback) {
         try {
+            const user = getCurrentUser();
+            if (!user) {
+                throw new Error('Usuário não autenticado');
+            }
+
             console.log('🔄 Configurando sincronização em tempo real...');
+            console.log('👤 Usuário:', user.email);
 
-            const q = query(
-                collection(db, this.COLLECTION),
-                orderBy('date', 'asc')
-            );
-
-            const unsubscribe = onSnapshot(q,
-                (snapshot) => {
-                    const orders = [];
-
-                    snapshot.forEach((doc) => {
-                        orders.push({
-                            id: doc.id,
-                            ...doc.data()
-                        });
-                    });
-
-                    console.log('🔔 Dados atualizados em tempo real:', orders.length, 'encomendas');
-                    callback(orders);
-                },
-                (error) => {
-                    console.error('❌ Erro na sincronização:', error);
-                }
-            );
+            const unsubscribe = watchUserOrders((orders) => {
+                console.log('🔔 Dados atualizados em tempo real:', orders.length, 'encomendas');
+                callback(orders);
+            });
 
             console.log('✅ Sincronização em tempo real ativada');
             return unsubscribe;
@@ -279,4 +232,4 @@ window.FirebaseOrders = {
     }
 };
 
-console.log('✅ FirebaseOrders API disponível globalmente');
+console.log('✅ FirebaseOrders API disponível globalmente (com dados por usuário)');

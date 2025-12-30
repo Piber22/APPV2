@@ -1,28 +1,11 @@
 // ============================================
-// ORÇAMENTOS - FIREBASE (TEMPO REAL)
+// ORÇAMENTOS - FIREBASE (COM DADOS POR USUÁRIO)
+// Substitui o orcamento-firebase.js existente em /orcamento/
 // Sincronização automática em tempo real
 // ============================================
 
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getFirestore, doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-
-// Configuração do Firebase (mesma do cardápio)
-const firebaseConfig = {
-  apiKey: "AIzaSyBLhKaigyOT9dCAd9iA1o5j18rFB4rQ5uo",
-  authDomain: "doce-gestao-4b032.firebaseapp.com",
-  projectId: "doce-gestao-4b032",
-  storageBucket: "doce-gestao-4b032.firebasestorage.app",
-  messagingSenderId: "318295225306",
-  appId: "1:318295225306:web:3beaebbb5979edba6686e3"
-};
-
-// Inicializar Firebase
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-// Referência ao documento
-const MENU_DOC_ID = 'default';
-const menuDocRef = doc(db, 'menu', MENU_DOC_ID);
+import { watchUserMenu } from '../user-data-service.js';
+import { getCurrentUser } from '../auth-service.js';
 
 // State global (será usado pelo orcamento-script.js)
 window.state = {
@@ -34,43 +17,40 @@ window.state = {
 let unsubscribe = null;
 
 // ============================================
-// SETUP SINCRONIZAÇÃO EM TEMPO REA L
+// SETUP SINCRONIZAÇÃO EM TEMPO REAL
 // ============================================
 
 function setupRealtimeMenu() {
     console.log('🔄 Configurando sincronização em tempo real...');
 
-    unsubscribe = onSnapshot(menuDocRef,
-        (doc) => {
-            if (doc.exists()) {
-                const data = doc.data();
+    const user = getCurrentUser();
+    if (!user) {
+        console.error('❌ Usuário não autenticado');
+        showError('Você precisa fazer login para criar orçamentos');
+        return;
+    }
 
-                console.log('✅ Dados recebidos:', {
-                    categorias: data.categories?.length || 0,
-                    itens: data.items?.length || 0,
-                    lastModified: data.lastModified
-                });
+    console.log('👤 Carregando cardápio de:', user.email);
 
-                window.state.settings = data.settings || {};
-                window.state.categories = data.categories || [];
-                window.state.menuItems = data.items || [];
+    unsubscribe = watchUserMenu((data) => {
+        console.log('✅ Dados recebidos:', {
+            usuário: user.email,
+            categorias: data.categories?.length || 0,
+            itens: data.items?.length || 0,
+            lastModified: data.lastModified
+        });
 
-                // Notificar que os dados foram atualizados
-                if (typeof window.onMenuDataLoaded === 'function') {
-                    window.onMenuDataLoaded();
-                }
+        window.state.settings = data.settings || {};
+        window.state.categories = data.categories || [];
+        window.state.menuItems = data.items || [];
 
-                console.log('🔔 Cardápio atualizado em tempo real!');
-            } else {
-                console.warn('⚠️ Documento não existe ainda');
-                showError('Cardápio ainda não foi configurado');
-            }
-        },
-        (error) => {
-            console.error('❌ Erro na sincronização:', error);
-            showError('Erro ao carregar cardápio');
+        // Notificar que os dados foram atualizados
+        if (typeof window.onMenuDataLoaded === 'function') {
+            window.onMenuDataLoaded();
         }
-    );
+
+        console.log('🔔 Cardápio atualizado em tempo real!');
+    });
 }
 
 // ============================================
@@ -102,10 +82,43 @@ function showError(message) {
     console.error('❌', message);
     hideLoading();
 
-    // Você pode adicionar uma UI de erro aqui se desejar
+    // Mostrar mensagem de erro
+    const errorDiv = document.createElement('div');
+    errorDiv.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 40px;
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        text-align: center;
+        z-index: 10000;
+        max-width: 90%;
+        width: 400px;
+    `;
+    errorDiv.innerHTML = `
+        <i class="fas fa-exclamation-circle" style="font-size: 64px; color: #ef4444; margin-bottom: 20px;"></i>
+        <h2 style="font-size: 24px; color: #1f2937; margin-bottom: 10px;">Ops!</h2>
+        <p style="font-size: 16px; color: #6b7280; margin-bottom: 20px;">${message}</p>
+        <button onclick="window.location.href='../login/login.html'" style="
+            background: #ec4899;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 16px;
+        ">Fazer Login</button>
+    `;
+    document.body.appendChild(errorDiv);
+
+    // Mostrar o container principal com opacidade
     const mainContainer = document.querySelector('.main-container');
     if (mainContainer) {
-        mainContainer.style.opacity = '1';
+        mainContainer.style.opacity = '0.3';
     }
 }
 
@@ -117,13 +130,24 @@ async function initializeFirebase() {
     console.log('═══════════════════════════════════════');
     console.log('🍰 ORÇAMENTOS - FIREBASE');
     console.log('═══════════════════════════════════════');
+
+    const user = getCurrentUser();
+
     console.log('📅 Data/Hora:', new Date().toLocaleString());
     console.log('🌐 Online:', navigator.onLine);
+    console.log('👤 Usuário:', user ? user.email : 'Não autenticado');
     console.log('═══════════════════════════════════════');
 
     showLoading();
 
     try {
+        // Verificar se está autenticado
+        if (!user) {
+            console.error('❌ Usuário não autenticado');
+            showError('Você precisa fazer login para criar orçamentos');
+            return;
+        }
+
         // Configurar listener de tempo real
         setupRealtimeMenu();
 
@@ -161,3 +185,5 @@ if (document.readyState === 'loading') {
 } else {
     initializeFirebase();
 }
+
+console.log('✅ Orçamento Firebase carregado (com dados por usuário)');
