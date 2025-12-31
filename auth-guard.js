@@ -1,28 +1,43 @@
 /**
- * Auth Guard - Sistema de proteção de rotas
- * Coloque este arquivo na raiz do projeto (/)
+ * Auth Guard - Sistema de proteção de rotas com Firebase Auth
  * Importe no início de cada página que precisa de autenticação
- *
- * Funciona tanto localmente quanto no GitHub Pages
  */
 
-// Função para obter o caminho base (para GitHub Pages)
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import {
+    getAuth,
+    onAuthStateChanged,
+    signOut
+} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+
+// Configuração do Firebase
+const firebaseConfig = {
+    apiKey: "AIzaSyBLhKaigyOT9dCAd9iA1o5j18rFB4rQ5uo",
+    authDomain: "doce-gestao-4b032.firebaseapp.com",
+    projectId: "doce-gestao-4b032",
+    storageBucket: "doce-gestao-4b032.firebasestorage.app",
+    messagingSenderId: "318295225306",
+    appId: "1:318295225306:web:3beaebbb5979edba6686e3"
+};
+
+// Inicializar Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
+// ============================================
+// FUNÇÕES DE CAMINHO
+// ============================================
+
 function getBasePath() {
     const currentPath = window.location.pathname;
-
-    // Detectar se está no GitHub Pages
-    // Ex: /APPV2/index.html → base = /APPV2
     const pathParts = currentPath.split('/').filter(part => part);
 
-    // Se tiver partes no caminho e não for apenas um arquivo
     if (pathParts.length > 0) {
-        // Remover o último item se for um arquivo
         const lastPart = pathParts[pathParts.length - 1];
         if (lastPart.includes('.html')) {
             pathParts.pop();
         }
 
-        // Reconstruir o base path
         if (pathParts.length > 0) {
             return '/' + pathParts[0];
         }
@@ -31,109 +46,156 @@ function getBasePath() {
     return '';
 }
 
-// Função para obter o caminho correto do login baseado na página atual
 function getLoginPath() {
     const currentPath = window.location.pathname;
     const basePath = getBasePath();
 
-    console.log('Current path:', currentPath);
-    console.log('Base path:', basePath);
+    console.log('🔍 Current path:', currentPath);
+    console.log('🔍 Base path:', basePath);
 
-    // Se estiver no GitHub Pages
     if (basePath) {
-        // Se estiver na raiz ou no index.html
-        if (currentPath.endsWith('/') ||
-            currentPath.endsWith('/index.html') ||
-            currentPath === basePath + '/' ||
-            currentPath === basePath + '/index.html') {
-            return basePath + '/login/login.html';
-        }
-
-        // Se estiver em uma subpasta
         return basePath + '/login/login.html';
     }
 
-    // Se estiver local (file://)
-    // Se estiver na raiz ou no index.html
     if (currentPath.endsWith('/') || currentPath.endsWith('/index.html') || currentPath.endsWith('index.html')) {
         return 'login/login.html';
     }
 
-    // Se estiver em uma subpasta
     return '../login/login.html';
 }
 
-// Função para verificar autenticação
+// ============================================
+// VERIFICAR AUTENTICAÇÃO
+// ============================================
+
+let authCheckComplete = false;
+
 function checkAuthentication() {
-    const isAuthenticated = localStorage.getItem('isAuthenticated');
-    const user = localStorage.getItem('user');
+    return new Promise((resolve) => {
+        // Se já completou a verificação, usar dados do localStorage
+        if (authCheckComplete) {
+            const isAuthenticated = localStorage.getItem('isAuthenticated');
+            const user = localStorage.getItem('user');
 
-    // Se não estiver autenticado, redireciona para login
-    if (isAuthenticated !== 'true' || !user) {
-        console.warn('Usuário não autenticado. Redirecionando para login...');
+            if (isAuthenticated === 'true' && user) {
+                console.log('✅ Autenticação verificada (cache)');
+                resolve(true);
+            } else {
+                console.warn('⚠️ Não autenticado (cache)');
+                redirectToLogin();
+                resolve(false);
+            }
+            return;
+        }
 
-        // Salvar a página atual para redirecionar após login
-        const currentPath = window.location.pathname;
-        localStorage.setItem('redirectAfterLogin', currentPath);
+        // Primeira verificação: usar Firebase Auth
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            unsubscribe(); // Desinscrever após primeira verificação
+            authCheckComplete = true;
 
-        // Redirecionar para login com caminho correto
-        const loginPath = getLoginPath();
-        console.log('Redirecionando para:', loginPath);
-        window.location.href = loginPath;
-        return false;
-    }
+            if (user) {
+                console.log('✅ Usuário autenticado:', user.email);
 
-    try {
-        const userData = JSON.parse(user);
-        console.log('Usuário autenticado:', userData.displayName || userData.email);
-        return true;
-    } catch (error) {
-        console.error('Erro ao verificar autenticação:', error);
-        localStorage.removeItem('user');
-        localStorage.removeItem('isAuthenticated');
-        window.location.href = getLoginPath();
-        return false;
-    }
+                // Atualizar localStorage
+                const userData = {
+                    uid: user.uid,
+                    email: user.email,
+                    displayName: user.displayName,
+                    photoURL: user.photoURL,
+                    emailVerified: user.emailVerified
+                };
+
+                localStorage.setItem('user', JSON.stringify(userData));
+                localStorage.setItem('isAuthenticated', 'true');
+
+                resolve(true);
+            } else {
+                console.warn('⚠️ Nenhum usuário autenticado');
+                localStorage.removeItem('user');
+                localStorage.removeItem('isAuthenticated');
+
+                redirectToLogin();
+                resolve(false);
+            }
+        });
+    });
 }
 
-// Função para obter dados do usuário atual
+function redirectToLogin() {
+    const currentPath = window.location.pathname;
+    localStorage.setItem('redirectAfterLogin', currentPath);
+
+    const loginPath = getLoginPath();
+    console.log('↪️ Redirecionando para login:', loginPath);
+    window.location.href = loginPath;
+}
+
+// ============================================
+// OBTER USUÁRIO ATUAL
+// ============================================
+
 function getCurrentUser() {
     const user = localStorage.getItem('user');
     if (user) {
         try {
             return JSON.parse(user);
         } catch (error) {
-            console.error('Erro ao obter dados do usuário:', error);
+            console.error('❌ Erro ao obter dados do usuário:', error);
             return null;
         }
     }
     return null;
 }
 
-// Função para fazer logout
-function logout() {
+// ============================================
+// LOGOUT
+// ============================================
+
+async function logout() {
     const confirmLogout = confirm('Deseja realmente sair?');
 
     if (confirmLogout) {
-        localStorage.removeItem('user');
-        localStorage.removeItem('isAuthenticated');
-        localStorage.removeItem('redirectAfterLogin');
+        try {
+            console.log('🔓 Realizando logout...');
 
-        console.log('Logout realizado com sucesso!');
+            // Logout do Firebase
+            await signOut(auth);
 
-        // Redirecionar para login com caminho correto
-        const loginPath = getLoginPath();
-        console.log('Logout - Redirecionando para:', loginPath);
-        window.location.href = loginPath;
+            // Limpar localStorage
+            localStorage.removeItem('user');
+            localStorage.removeItem('isAuthenticated');
+            localStorage.removeItem('redirectAfterLogin');
+
+            console.log('✅ Logout realizado com sucesso!');
+
+            // Redirecionar para login
+            const loginPath = getLoginPath();
+            console.log('↪️ Redirecionando para:', loginPath);
+            window.location.href = loginPath;
+
+        } catch (error) {
+            console.error('❌ Erro no logout:', error);
+            alert('Erro ao fazer logout. Tente novamente.');
+        }
     }
 }
 
-// Verificar autenticação ao carregar a página
-checkAuthentication();
+// ============================================
+// VERIFICAR AUTENTICAÇÃO AO CARREGAR
+// ============================================
 
-// Exportar funções para uso global
+console.log('🛡️ Auth Guard carregado');
+await checkAuthentication();
+
+// ============================================
+// EXPORTAR PARA USO GLOBAL
+// ============================================
+
 window.authGuard = {
     checkAuth: checkAuthentication,
     getCurrentUser: getCurrentUser,
-    logout: logout
+    logout: logout,
+    auth: auth
 };
+
+console.log('✅ Auth Guard inicializado');

@@ -1,66 +1,75 @@
-// Firebase será configurado aqui
-// import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-// import { getAuth, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+// ============================================
+// LOGIN COM GOOGLE - FIREBASE AUTH
+// ============================================
 
-// Configuração do Firebase (adicione suas credenciais)
-/*
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import {
+    getAuth,
+    GoogleAuthProvider,
+    signInWithPopup,
+    onAuthStateChanged
+} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+
+// Configuração do Firebase (mesma do resto do app)
 const firebaseConfig = {
-    apiKey: "SUA_API_KEY",
-    authDomain: "SEU_AUTH_DOMAIN",
-    projectId: "SEU_PROJECT_ID",
-    storageBucket: "SEU_STORAGE_BUCKET",
-    messagingSenderId: "SEU_MESSAGING_SENDER_ID",
-    appId: "SEU_APP_ID"
+    apiKey: "AIzaSyBLhKaigyOT9dCAd9iA1o5j18rFB4rQ5uo",
+    authDomain: "doce-gestao-4b032.firebaseapp.com",
+    projectId: "doce-gestao-4b032",
+    storageBucket: "doce-gestao-4b032.firebasestorage.app",
+    messagingSenderId: "318295225306",
+    appId: "1:318295225306:web:3beaebbb5979edba6686e3"
 };
 
 // Inicializar Firebase
+console.log('🔥 Inicializando Firebase Auth...');
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-*/
+const provider = new GoogleAuthProvider();
 
 // Elementos DOM
 const loginBtn = document.getElementById('google-login-btn');
 
-// Função para obter o caminho base correto (funciona local e GitHub Pages)
+// ============================================
+// FUNÇÃO PARA OBTER CAMINHO CORRETO
+// ============================================
+
 function getBasePath() {
     const currentPath = window.location.pathname;
 
-    // Se estiver no GitHub Pages (ex: /APPV2/login/login.html)
     if (currentPath.includes('/login/login.html')) {
-        // Remove /login/login.html para pegar a base
         return currentPath.replace('/login/login.html', '');
     }
 
     return '';
 }
 
-// Função para obter o caminho correto do index
 function getIndexPath() {
     const basePath = getBasePath();
 
-    // Se tiver base path (GitHub Pages), usa caminho absoluto
     if (basePath) {
         return basePath + '/index.html';
     }
 
-    // Se for local, usa caminho relativo
     return '../index.html';
 }
 
-// Função de login com Google
+// ============================================
+// LOGIN COM GOOGLE
+// ============================================
+
 async function loginWithGoogle() {
     try {
+        console.log('🔐 Iniciando login com Google...');
         loginBtn.classList.add('loading');
 
-        // Simulação do login (remova isso quando integrar com Firebase)
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // ====== INTEGRAÇÃO REAL COM FIREBASE ======
-        // Descomente o código abaixo quando configurar o Firebase:
-        /*
-        const provider = new GoogleAuthProvider();
+        // Popup de login do Google
         const result = await signInWithPopup(auth, provider);
         const user = result.user;
+
+        console.log('✅ Login realizado com sucesso!');
+        console.log('👤 Usuário:', user.displayName);
+        console.log('📧 Email:', user.email);
+        console.log('🆔 UID:', user.uid);
 
         // Salvar dados do usuário no localStorage
         const userData = {
@@ -75,57 +84,26 @@ async function loginWithGoogle() {
         localStorage.setItem('user', JSON.stringify(userData));
         localStorage.setItem('isAuthenticated', 'true');
 
-        console.log('Login realizado com sucesso!', userData);
+        console.log('💾 Dados salvos no localStorage');
 
         // Verificar se há uma página para redirecionar após login
         const redirectPath = localStorage.getItem('redirectAfterLogin');
         localStorage.removeItem('redirectAfterLogin');
 
-        // Redirecionar para o hub ou página anterior
+        // Redirecionar
         if (redirectPath && redirectPath !== '/login/login.html' && !redirectPath.includes('/login/login.html')) {
+            console.log('↪️ Redirecionando para:', redirectPath);
             window.location.href = redirectPath;
         } else {
-            window.location.href = getIndexPath();
+            const indexPath = getIndexPath();
+            console.log('🏠 Redirecionando para home:', indexPath);
+            window.location.href = indexPath;
         }
-        */
-
-        // ====== SIMULAÇÃO (REMOVER EM PRODUÇÃO) ======
-        console.log('Login simulado com sucesso!');
-
-        // Salvar usuário simulado
-        const mockUser = {
-            uid: 'mock-uid-12345',
-            email: 'usuario@exemplo.com',
-            displayName: 'Usuário Teste',
-            photoURL: 'https://via.placeholder.com/150',
-            emailVerified: true,
-            loginTime: new Date().toISOString()
-        };
-
-        localStorage.setItem('user', JSON.stringify(mockUser));
-        localStorage.setItem('isAuthenticated', 'true');
-
-        alert('Login realizado! (Modo simulação)\n\nVocê será redirecionado para o hub.');
-
-        // Verificar se há uma página para redirecionar após login
-        const redirectPath = localStorage.getItem('redirectAfterLogin');
-        localStorage.removeItem('redirectAfterLogin');
-
-        // Redirecionar para o hub ou página anterior
-        setTimeout(() => {
-            if (redirectPath && redirectPath !== '/login/login.html' && !redirectPath.includes('/login/login.html')) {
-                window.location.href = redirectPath;
-            } else {
-                const indexPath = getIndexPath();
-                console.log('Redirecionando para:', indexPath);
-                window.location.href = indexPath;
-            }
-        }, 1000);
 
     } catch (error) {
-        console.error('Erro no login:', error);
+        console.error('❌ Erro no login:', error);
 
-        // Tratamento de erros específicos do Firebase
+        // Tratamento de erros específicos
         let errorMessage = 'Erro ao fazer login. Tente novamente.';
 
         if (error.code === 'auth/popup-closed-by-user') {
@@ -134,6 +112,8 @@ async function loginWithGoogle() {
             errorMessage = 'Erro de conexão. Verifique sua internet.';
         } else if (error.code === 'auth/unauthorized-domain') {
             errorMessage = 'Domínio não autorizado. Configure o Firebase corretamente.';
+        } else if (error.code === 'auth/popup-blocked') {
+            errorMessage = 'Pop-up bloqueado. Permita pop-ups para fazer login.';
         }
 
         alert(errorMessage);
@@ -143,7 +123,10 @@ async function loginWithGoogle() {
     }
 }
 
-// Função para verificar se usuário já está logado
+// ============================================
+// VERIFICAR SE JÁ ESTÁ LOGADO
+// ============================================
+
 function checkIfUserIsLoggedIn() {
     const isAuthenticated = localStorage.getItem('isAuthenticated');
     const user = localStorage.getItem('user');
@@ -151,34 +134,65 @@ function checkIfUserIsLoggedIn() {
     if (isAuthenticated === 'true' && user) {
         try {
             const userData = JSON.parse(user);
-            console.log('Usuário já logado:', userData);
+            console.log('✅ Usuário já logado:', userData.displayName);
 
-            // Redirecionar para o hub se já estiver logado
+            // Redirecionar para o hub
             const indexPath = getIndexPath();
-            console.log('Já autenticado. Redirecionando para:', indexPath);
+            console.log('↪️ Redirecionando para:', indexPath);
             window.location.href = indexPath;
 
         } catch (error) {
-            console.error('Erro ao ler dados do usuário:', error);
+            console.error('❌ Erro ao ler dados do usuário:', error);
             localStorage.removeItem('user');
             localStorage.removeItem('isAuthenticated');
         }
     }
 }
 
-// Event Listeners
+// ============================================
+// LISTENER DE ESTADO DE AUTH
+// ============================================
+
+onAuthStateChanged(auth, (user) => {
+    if (user) {
+        console.log('🔐 Estado de autenticação:', user.email);
+    } else {
+        console.log('🔓 Nenhum usuário autenticado');
+    }
+});
+
+// ============================================
+// EVENT LISTENERS
+// ============================================
+
 loginBtn.addEventListener('click', loginWithGoogle);
 
-// Verificar login ao carregar a página
-window.addEventListener('load', checkIfUserIsLoggedIn);
+// ============================================
+// INICIALIZAÇÃO
+// ============================================
 
-// Função para logout (útil para testes)
+window.addEventListener('load', () => {
+    console.log('═══════════════════════════════════════');
+    console.log('🔐 LOGIN - DOCE GESTÃO');
+    console.log('═══════════════════════════════════════');
+
+    checkIfUserIsLoggedIn();
+});
+
+// ============================================
+// FUNÇÃO GLOBAL PARA LOGOUT (PARA TESTES)
+// ============================================
+
 window.logout = function() {
-    localStorage.removeItem('user');
-    localStorage.removeItem('isAuthenticated');
-    console.log('Logout realizado!');
-    alert('Você foi desconectado!');
-    window.location.reload();
+    auth.signOut().then(() => {
+        localStorage.removeItem('user');
+        localStorage.removeItem('isAuthenticated');
+        console.log('✅ Logout realizado!');
+        alert('Você foi desconectado!');
+        window.location.reload();
+    }).catch((error) => {
+        console.error('❌ Erro no logout:', error);
+    });
 };
 
-// Para testar logout, abra o console e digite: logout()
+console.log('✅ Login script carregado com Firebase Auth');
