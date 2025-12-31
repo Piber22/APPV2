@@ -9,6 +9,52 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Pacifico&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* Botão de logout no header */
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn-logout {
+            background: transparent;
+            color: #9ca3af;
+            border: 2px solid #fce7f3;
+            padding: 8px 16px;
+            border-radius: 50px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-logout:hover {
+            background: #fce7f3;
+            color: #ec4899;
+            border-color: #fbcfe8;
+        }
+
+        .btn-logout i {
+            font-size: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .btn-logout span {
+                display: none;
+            }
+            .btn-logout {
+                width: 40px;
+                height: 40px;
+                padding: 0;
+                justify-content: center;
+            }
+        }
+    </style>
 </head>
 <body>
     <!-- Header -->
@@ -20,9 +66,15 @@
                 </div>
                 <h1 class="logo-text">Doce Gestão</h1>
             </div>
-            <button id="btnNewOrder" class="btn-primary">
-                <i class="fas fa-plus"></i> Novo Item
-            </button>
+            <div class="header-right">
+                <button id="btnNewOrder" class="btn-primary">
+                    <i class="fas fa-plus"></i> Novo Item
+                </button>
+                <button class="btn-logout" onclick="window.authGuard.logout()">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Sair</span>
+                </button>
+            </div>
         </div>
     </header>
 
@@ -153,7 +205,8 @@
         </div>
     </div>
 
-    <!-- IMPORTANTE: Firebase integration primeiro, depois o script principal -->
+    <!-- IMPORTANTE: Auth Guard primeiro, depois Firebase e script principal -->
+    <script type="module" src="../auth-guard.js"></script>
     <script type="module" src="firebase-calendario.js"></script>
     <script type="module" src="calendario-script.js"></script>
 </body>
