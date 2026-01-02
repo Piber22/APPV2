@@ -1,9 +1,10 @@
 // ============================================
 // FIREBASE INTEGRATION - DOCE GESTÃO
-// Sincronização em tempo real e offline-first
+// Sincronização em tempo real com userId
 // ============================================
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 import { getFirestore, doc, setDoc, getDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 // Configuração do Firebase
@@ -18,11 +19,16 @@ const firebaseConfig = {
 
 // Inicializar Firebase
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Referência ao documento (você pode mudar 'default' para ter múltiplos usuários)
-const MENU_DOC_ID = 'default';
-const menuDocRef = doc(db, 'menu', MENU_DOC_ID);
+// ============================================
+// VARIÁVEIS GLOBAIS
+// ============================================
+
+let currentUserId = null;
+let menuDocRef = null;
+let unsubscribeSnapshot = null;
 
 // Estado de sincronização
 let syncStatus = {
@@ -34,8 +40,50 @@ let syncStatus = {
     isInitialized: false
 };
 
-// Listener de sincronização em tempo real
-let unsubscribeSnapshot = null;
+// ============================================
+// OBTER USER ID
+// ============================================
+
+async function getUserId() {
+    if (currentUserId) {
+        return currentUserId;
+    }
+
+    return new Promise((resolve, reject) => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            unsubscribe();
+            if (user) {
+                currentUserId = user.uid;
+                console.log('👤 UserId obtido:', currentUserId);
+                resolve(currentUserId);
+            } else {
+                console.error('❌ Usuário não autenticado');
+                reject(new Error('Usuário não autenticado'));
+            }
+        });
+    });
+}
+
+// ============================================
+// INICIALIZAR REFERÊNCIA DO DOCUMENTO
+// ============================================
+
+async function initMenuDocRef() {
+    if (menuDocRef) {
+        return menuDocRef;
+    }
+
+    try {
+        const userId = await getUserId();
+        // Nova estrutura: users/{userId}/menu/default
+        menuDocRef = doc(db, 'users', userId, 'menu', 'default');
+        console.log('📄 Referência do documento criada:', `users/${userId}/menu/default`);
+        return menuDocRef;
+    } catch (error) {
+        console.error('❌ Erro ao criar referência:', error);
+        throw error;
+    }
+}
 
 // ============================================
 // SALVAR DADOS NO FIREBASE
@@ -51,10 +99,13 @@ async function saveToFirebase() {
         syncStatus.isSyncing = true;
         console.log('💾 Salvando no Firebase...');
 
+        const docRef = await initMenuDocRef();
+
         const dataToSave = {
             settings: state.settings,
             categories: state.categories,
             items: state.items,
+            userId: currentUserId,
             lastModified: new Date().toISOString(),
             version: 1
         };
@@ -62,10 +113,11 @@ async function saveToFirebase() {
         console.log('📤 Dados a serem salvos:', {
             categorias: dataToSave.categories.length,
             itens: dataToSave.items.length,
+            userId: currentUserId,
             timestamp: dataToSave.lastModified
         });
 
-        await setDoc(menuDocRef, dataToSave);
+        await setDoc(docRef, dataToSave);
 
         syncStatus.lastSaved = new Date();
         syncStatus.hasUnsavedChanges = false;
@@ -90,7 +142,8 @@ async function loadFromFirebase() {
     console.log('☁️ Carregando dados do Firebase...');
 
     try {
-        const docSnap = await getDoc(menuDocRef);
+        const docRef = await initMenuDocRef();
+        const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
             const data = docSnap.data();
@@ -98,6 +151,7 @@ async function loadFromFirebase() {
             console.log('✅ Dados recebidos do Firebase:', {
                 categorias: data.categories?.length || 0,
                 itens: data.items?.length || 0,
+                userId: data.userId,
                 lastModified: data.lastModified
             });
 
@@ -113,7 +167,7 @@ async function loadFromFirebase() {
         } else {
             console.log('ℹ️ Documento não existe ainda, criando com dados padrão...');
 
-            // Salvar dados iniciais
+            // Usar dados padrão do state atual
             await saveToFirebase();
             console.log('✅ Dados iniciais salvos no Firebase');
         }
@@ -129,51 +183,60 @@ async function loadFromFirebase() {
 // SINCRONIZAÇÃO EM TEMPO REAL
 // ============================================
 
-function setupRealtimeSync() {
+async function setupRealtimeSync() {
     console.log('🔄 Configurando sincronização em tempo real...');
 
-    // Escutar mudanças no documento
-    unsubscribeSnapshot = onSnapshot(menuDocRef, (doc) => {
-        // Ignorar a primeira chamada (que é o load inicial)
-        if (!syncStatus.isInitialized) {
-            syncStatus.isInitialized = true;
-            console.log('✅ Listener de tempo real ativado');
-            return;
-        }
+    try {
+        const docRef = await initMenuDocRef();
 
-        // Ignorar se estamos salvando (para evitar loop)
-        if (syncStatus.isSyncing) {
-            console.log('⏭️ Ignorando update (salvando no momento)');
-            return;
-        }
+        // Escutar mudanças no documento
+        unsubscribeSnapshot = onSnapshot(docRef, (doc) => {
+            // Ignorar a primeira chamada (que é o load inicial)
+            if (!syncStatus.isInitialized) {
+                syncStatus.isInitialized = true;
+                console.log('✅ Listener de tempo real ativado');
+                return;
+            }
 
-        // Ignorar se temos mudanças não salvas
-        if (syncStatus.hasUnsavedChanges) {
-            console.log('⏭️ Ignorando update (há mudanças locais não salvas)');
-            return;
-        }
+            // Ignorar se estamos salvando (para evitar loop)
+            if (syncStatus.isSyncing) {
+                console.log('⏭️ Ignorando update (salvando no momento)');
+                return;
+            }
 
-        if (doc.exists()) {
-            const data = doc.data();
+            // Ignorar se temos mudanças não salvas
+            if (syncStatus.hasUnsavedChanges) {
+                console.log('⏭️ Ignorando update (há mudanças locais não salvas)');
+                return;
+            }
 
-            console.log('🔔 Atualização recebida em tempo real!');
-            console.log('📥 Novos dados:', {
-                categorias: data.categories?.length || 0,
-                itens: data.items?.length || 0,
-                lastModified: data.lastModified
-            });
+            if (doc.exists()) {
+                const data = doc.data();
 
-            // Atualizar estado
-            if (data.settings) state.settings = data.settings;
-            if (data.categories) state.categories = data.categories;
-            if (data.items) state.items = data.items;
+                console.log('🔔 Atualização recebida em tempo real!');
+                console.log('📥 Novos dados:', {
+                    categorias: data.categories?.length || 0,
+                    itens: data.items?.length || 0,
+                    userId: data.userId,
+                    lastModified: data.lastModified
+                });
 
-            updateUI();
-            console.log('✅ Interface atualizada com dados do servidor');
-        }
-    }, (error) => {
-        console.error('❌ Erro no listener de tempo real:', error);
-    });
+                // Atualizar estado
+                if (data.settings) state.settings = data.settings;
+                if (data.categories) state.categories = data.categories;
+                if (data.items) state.items = data.items;
+
+                updateUI();
+                console.log('✅ Interface atualizada com dados do servidor');
+            }
+        }, (error) => {
+            console.error('❌ Erro no listener de tempo real:', error);
+        });
+
+    } catch (error) {
+        console.error('❌ Erro ao configurar sincronização:', error);
+        throw error;
+    }
 }
 
 // ============================================
@@ -259,13 +322,18 @@ async function initializeFirebaseIntegration() {
     showLoading();
 
     try {
+        // Aguardar autenticação e obter userId
+        console.log('🔐 Aguardando autenticação...');
+        await getUserId();
+        console.log('✅ Usuário autenticado:', currentUserId);
+
         // Carregar dados do Firebase
         console.log('☁️ Carregando dados do Firebase...');
         await loadFromFirebase();
         console.log('✅ Dados carregados com sucesso');
 
         // Configurar sincronização em tempo real
-        setupRealtimeSync();
+        await setupRealtimeSync();
 
         // Configurar event listeners
         console.log('⚙️ Configurando event listeners...');
@@ -277,6 +345,7 @@ async function initializeFirebaseIntegration() {
         console.log('═══════════════════════════════════════');
         console.log('✨ SISTEMA INICIALIZADO COM SUCESSO');
         console.log('🔄 Sincronização em tempo real ATIVA');
+        console.log('👤 UserId:', currentUserId);
         console.log('═══════════════════════════════════════');
 
     } catch (error) {

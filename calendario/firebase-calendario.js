@@ -1,9 +1,10 @@
 // ============================================
 // FIREBASE INTEGRATION - CALENDARIO
+// Com suporte a múltiplos usuários
 // ============================================
 
-// Import Firebase modules
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import {
     getFirestore,
     collection,
@@ -11,16 +12,15 @@ import {
     updateDoc,
     deleteDoc,
     doc,
-    getDocs,
-    onSnapshot,
     query,
+    where,
     orderBy,
+    onSnapshot,
     Timestamp
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 // ============================================
 // FIREBASE CONFIGURATION
-// ⭐ USANDO O MESMO PROJETO QUE FUNCIONA
 // ============================================
 
 const firebaseConfig = {
@@ -35,28 +35,60 @@ const firebaseConfig = {
 // Initialize Firebase
 console.log('🔥 Inicializando Firebase...');
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 const db = getFirestore(app);
 console.log('✅ Firebase inicializado com sucesso');
+
+// ============================================
+// VARIÁVEIS GLOBAIS
+// ============================================
+
+let currentUserId = null;
+
+// ============================================
+// OBTER USER ID
+// ============================================
+
+async function getUserId() {
+    if (currentUserId) {
+        return currentUserId;
+    }
+
+    return new Promise((resolve, reject) => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            unsubscribe();
+            if (user) {
+                currentUserId = user.uid;
+                console.log('👤 UserId obtido:', currentUserId);
+                resolve(currentUserId);
+            } else {
+                console.error('❌ Usuário não autenticado');
+                reject(new Error('Usuário não autenticado'));
+            }
+        });
+    });
+}
 
 // ============================================
 // FIREBASE ORDERS API
 // ============================================
 
 window.FirebaseOrders = {
-    // Collection name
-    COLLECTION: 'orders',
-
-    // Load all orders from Firebase
+    // Load all orders from Firebase (filtered by userId)
     async loadOrders() {
         try {
             console.log('📦 Carregando encomendas do Firebase...');
 
-            const q = query(
-                collection(db, this.COLLECTION),
-                orderBy('date', 'asc')
-            );
+            const userId = await getUserId();
 
+            // Nova estrutura: users/{userId}/orders
+            const ordersRef = collection(db, 'users', userId, 'orders');
+            const q = query(ordersRef, orderBy('date', 'asc'));
+
+            // Usar getDocs diretamente do Firestore
+            const { getDocs } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
             const querySnapshot = await getDocs(q);
+
             const orders = [];
 
             querySnapshot.forEach((doc) => {
@@ -66,7 +98,7 @@ window.FirebaseOrders = {
                 });
             });
 
-            console.log(`✅ ${orders.length} encomendas carregadas`);
+            console.log(`✅ ${orders.length} encomendas carregadas do usuário ${userId}`);
             return orders;
 
         } catch (error) {
@@ -78,15 +110,18 @@ window.FirebaseOrders = {
     // Save order (create or update)
     async saveOrder(orderData) {
         try {
+            const userId = await getUserId();
+
             if (orderData.id) {
                 // Update existing order
                 console.log('📝 Atualizando encomenda:', orderData.id);
 
-                const orderRef = doc(db, this.COLLECTION, orderData.id);
+                const orderRef = doc(db, 'users', userId, 'orders', orderData.id);
                 const { id, createdAt, ...dataToUpdate } = orderData;
 
                 await updateDoc(orderRef, {
                     ...dataToUpdate,
+                    userId: userId, // Garantir que userId está sempre presente
                     updatedAt: Timestamp.now()
                 });
 
@@ -97,8 +132,11 @@ window.FirebaseOrders = {
                 // Create new order
                 console.log('➕ Criando nova encomenda');
 
-                const docRef = await addDoc(collection(db, this.COLLECTION), {
+                const ordersRef = collection(db, 'users', userId, 'orders');
+
+                const docRef = await addDoc(ordersRef, {
                     ...orderData,
+                    userId: userId, // Sempre incluir userId
                     createdAt: Timestamp.now(),
                     updatedAt: Timestamp.now()
                 });
@@ -118,7 +156,8 @@ window.FirebaseOrders = {
         try {
             console.log('🗑️ Excluindo encomenda:', orderId);
 
-            await deleteDoc(doc(db, this.COLLECTION, orderId));
+            const userId = await getUserId();
+            await deleteDoc(doc(db, 'users', userId, 'orders', orderId));
 
             console.log('✅ Encomenda excluída');
 
@@ -133,32 +172,35 @@ window.FirebaseOrders = {
         try {
             console.log('🔄 Configurando sincronização em tempo real...');
 
-            const q = query(
-                collection(db, this.COLLECTION),
-                orderBy('date', 'asc')
-            );
+            // Primeiro obter userId, depois configurar listener
+            getUserId().then(userId => {
+                const ordersRef = collection(db, 'users', userId, 'orders');
+                const q = query(ordersRef, orderBy('date', 'asc'));
 
-            const unsubscribe = onSnapshot(q,
-                (snapshot) => {
-                    const orders = [];
+                const unsubscribe = onSnapshot(q,
+                    (snapshot) => {
+                        const orders = [];
 
-                    snapshot.forEach((doc) => {
-                        orders.push({
-                            id: doc.id,
-                            ...doc.data()
+                        snapshot.forEach((doc) => {
+                            orders.push({
+                                id: doc.id,
+                                ...doc.data()
+                            });
                         });
-                    });
 
-                    console.log('🔔 Dados atualizados em tempo real:', orders.length, 'encomendas');
-                    callback(orders);
-                },
-                (error) => {
-                    console.error('❌ Erro na sincronização:', error);
-                }
-            );
+                        console.log('🔔 Dados atualizados em tempo real:', orders.length, 'encomendas');
+                        callback(orders);
+                    },
+                    (error) => {
+                        console.error('❌ Erro na sincronização:', error);
+                    }
+                );
 
-            console.log('✅ Sincronização em tempo real ativada');
-            return unsubscribe;
+                console.log('✅ Sincronização em tempo real ativada');
+                return unsubscribe;
+            }).catch(error => {
+                console.error('❌ Erro ao configurar sincronização:', error);
+            });
 
         } catch (error) {
             console.error('❌ Erro ao configurar sincronização:', error);

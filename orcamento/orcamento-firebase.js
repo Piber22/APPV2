@@ -1,9 +1,10 @@
 // ============================================
 // ORÇAMENTOS - FIREBASE (TEMPO REAL)
-// Sincronização automática em tempo real
+// Sincronização automática em tempo real com userId
 // ============================================
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 import { getFirestore, doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 // Configuração do Firebase (mesma do cardápio)
@@ -18,11 +19,16 @@ const firebaseConfig = {
 
 // Inicializar Firebase
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Referência ao documento
-const MENU_DOC_ID = 'default';
-const menuDocRef = doc(db, 'menu', MENU_DOC_ID);
+// ============================================
+// VARIÁVEIS GLOBAIS
+// ============================================
+
+let currentUserId = null;
+let menuDocRef = null;
+let unsubscribe = null;
 
 // State global (será usado pelo orcamento-script.js)
 window.state = {
@@ -31,46 +37,81 @@ window.state = {
     menuItems: []
 };
 
-let unsubscribe = null;
-
 // ============================================
-// SETUP SINCRONIZAÇÃO EM TEMPO REA L
+// OBTER USER ID
 // ============================================
 
-function setupRealtimeMenu() {
+async function getUserId() {
+    if (currentUserId) {
+        return currentUserId;
+    }
+
+    return new Promise((resolve, reject) => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            unsubscribe();
+            if (user) {
+                currentUserId = user.uid;
+                console.log('👤 UserId obtido:', currentUserId);
+                resolve(currentUserId);
+            } else {
+                console.error('❌ Usuário não autenticado');
+                reject(new Error('Usuário não autenticado'));
+            }
+        });
+    });
+}
+
+// ============================================
+// SETUP SINCRONIZAÇÃO EM TEMPO REAL
+// ============================================
+
+async function setupRealtimeMenu() {
     console.log('🔄 Configurando sincronização em tempo real...');
 
-    unsubscribe = onSnapshot(menuDocRef,
-        (doc) => {
-            if (doc.exists()) {
-                const data = doc.data();
+    try {
+        const userId = await getUserId();
 
-                console.log('✅ Dados recebidos:', {
-                    categorias: data.categories?.length || 0,
-                    itens: data.items?.length || 0,
-                    lastModified: data.lastModified
-                });
+        // Nova estrutura: users/{userId}/menu/default
+        menuDocRef = doc(db, 'users', userId, 'menu', 'default');
+        console.log('📄 Referência do documento:', `users/${userId}/menu/default`);
 
-                window.state.settings = data.settings || {};
-                window.state.categories = data.categories || [];
-                window.state.menuItems = data.items || [];
+        unsubscribe = onSnapshot(menuDocRef,
+            (doc) => {
+                if (doc.exists()) {
+                    const data = doc.data();
 
-                // Notificar que os dados foram atualizados
-                if (typeof window.onMenuDataLoaded === 'function') {
-                    window.onMenuDataLoaded();
+                    console.log('✅ Dados recebidos:', {
+                        categorias: data.categories?.length || 0,
+                        itens: data.items?.length || 0,
+                        userId: data.userId,
+                        lastModified: data.lastModified
+                    });
+
+                    window.state.settings = data.settings || {};
+                    window.state.categories = data.categories || [];
+                    window.state.menuItems = data.items || [];
+
+                    // Notificar que os dados foram atualizados
+                    if (typeof window.onMenuDataLoaded === 'function') {
+                        window.onMenuDataLoaded();
+                    }
+
+                    console.log('🔔 Cardápio atualizado em tempo real!');
+                } else {
+                    console.warn('⚠️ Documento não existe ainda');
+                    showError('Cardápio ainda não foi configurado');
                 }
-
-                console.log('🔔 Cardápio atualizado em tempo real!');
-            } else {
-                console.warn('⚠️ Documento não existe ainda');
-                showError('Cardápio ainda não foi configurado');
+            },
+            (error) => {
+                console.error('❌ Erro na sincronização:', error);
+                showError('Erro ao carregar cardápio');
             }
-        },
-        (error) => {
-            console.error('❌ Erro na sincronização:', error);
-            showError('Erro ao carregar cardápio');
-        }
-    );
+        );
+
+    } catch (error) {
+        console.error('❌ Erro ao configurar sincronização:', error);
+        throw error;
+    }
 }
 
 // ============================================
@@ -102,7 +143,6 @@ function showError(message) {
     console.error('❌', message);
     hideLoading();
 
-    // Você pode adicionar uma UI de erro aqui se desejar
     const mainContainer = document.querySelector('.main-container');
     if (mainContainer) {
         mainContainer.style.opacity = '1';
@@ -124,11 +164,17 @@ async function initializeFirebase() {
     showLoading();
 
     try {
+        // Aguardar autenticação e obter userId
+        console.log('🔐 Aguardando autenticação...');
+        await getUserId();
+        console.log('✅ Usuário autenticado:', currentUserId);
+
         // Configurar listener de tempo real
-        setupRealtimeMenu();
+        await setupRealtimeMenu();
 
         console.log('✨ Sistema iniciado com sucesso!');
         console.log('🔄 Sincronização em tempo real ATIVA');
+        console.log('👤 UserId:', currentUserId);
         console.log('═══════════════════════════════════════');
 
     } catch (error) {
