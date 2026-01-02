@@ -1,9 +1,11 @@
 // ============================================
 // CARDÁPIO PÚBLICO - FIREBASE (TEMPO REAL)
 // Sincronização automática em tempo real
+// CORRIGIDO: Usando estrutura users/{userId}/menu/default
 // ============================================
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 import { getFirestore, doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 // Configuração do Firebase
@@ -18,11 +20,16 @@ const firebaseConfig = {
 
 // Inicializar Firebase
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Referência ao documento
-const MENU_DOC_ID = 'default';
-const menuDocRef = doc(db, 'menu', MENU_DOC_ID);
+// ============================================
+// VARIÁVEIS GLOBAIS
+// ============================================
+
+let currentUserId = null;
+let menuDocRef = null;
+let unsubscribe = null;
 
 // State
 let menuData = {
@@ -31,44 +38,98 @@ let menuData = {
     items: []
 };
 
-let unsubscribe = null;
+// ============================================
+// OBTER USER ID
+// ============================================
+
+function waitForAuth() {
+    return new Promise((resolve, reject) => {
+        console.log('🔐 Aguardando autenticação...');
+
+        // Se já está autenticado
+        if (auth.currentUser) {
+            currentUserId = auth.currentUser.uid;
+            console.log('✅ Usuário autenticado (cache):', currentUserId);
+            resolve(currentUserId);
+            return;
+        }
+
+        // Aguardar autenticação
+        const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+            unsubscribeAuth();
+            if (user) {
+                currentUserId = user.uid;
+                console.log('✅ Usuário autenticado:', currentUserId);
+                resolve(currentUserId);
+            } else {
+                console.error('❌ Nenhum usuário autenticado');
+                reject(new Error('Usuário não autenticado'));
+            }
+        });
+
+        // Timeout de 10 segundos
+        setTimeout(() => {
+            unsubscribeAuth();
+            reject(new Error('Timeout ao aguardar autenticação'));
+        }, 10000);
+    });
+}
 
 // ============================================
 // SETUP SINCRONIZAÇÃO EM TEMPO REAL
 // ============================================
 
-function setupRealtimeMenu() {
+async function setupRealtimeMenu() {
     console.log('🔄 Configurando sincronização em tempo real...');
 
-    unsubscribe = onSnapshot(menuDocRef,
-        (doc) => {
-            if (doc.exists()) {
-                const data = doc.data();
+    try {
+        const userId = await waitForAuth();
 
-                console.log('✅ Dados recebidos:', {
-                    categorias: data.categories?.length || 0,
-                    itens: data.items?.length || 0,
-                    lastModified: data.lastModified
-                });
+        // Nova estrutura: users/{userId}/menu/default
+        menuDocRef = doc(db, 'users', userId, 'menu', 'default');
+        console.log('📄 Referência do documento:', `users/${userId}/menu/default`);
 
-                menuData.settings = data.settings || {};
-                menuData.categories = data.categories || [];
-                menuData.items = data.items || [];
+        unsubscribe = onSnapshot(menuDocRef,
+            (doc) => {
+                if (doc.exists()) {
+                    const data = doc.data();
 
-                renderMenu();
-                showMenu();
+                    console.log('✅ Dados recebidos:', {
+                        categorias: data.categories?.length || 0,
+                        itens: data.items?.length || 0,
+                        lastModified: data.lastModified
+                    });
 
-                console.log('🔔 Cardápio atualizado em tempo real!');
-            } else {
-                console.warn('⚠️ Documento não existe ainda');
-                showError('Cardápio ainda não foi configurado');
+                    menuData.settings = data.settings || {};
+                    menuData.categories = data.categories || [];
+                    menuData.items = data.items || [];
+
+                    renderMenu();
+                    showMenu();
+
+                    console.log('🔔 Cardápio atualizado em tempo real!');
+                } else {
+                    console.warn('⚠️ Documento não existe ainda');
+                    showError('Cardápio ainda não foi configurado');
+                }
+            },
+            (error) => {
+                console.error('❌ Erro na sincronização:', error);
+                showError('Erro ao carregar cardápio');
             }
-        },
-        (error) => {
-            console.error('❌ Erro na sincronização:', error);
-            showError('Erro ao carregar cardápio');
+        );
+
+    } catch (error) {
+        console.error('❌ Erro ao configurar sincronização:', error);
+
+        // Se não está autenticado, redirecionar para login
+        if (error.message.includes('autenticado')) {
+            console.log('↪️ Redirecionando para login...');
+            window.location.href = '../login/login.html';
+        } else {
+            showError('Erro ao conectar');
         }
-    );
+    }
 }
 
 // ============================================
@@ -225,7 +286,7 @@ async function init() {
 
     try {
         // Configurar listener de tempo real
-        setupRealtimeMenu();
+        await setupRealtimeMenu();
 
         console.log('✨ Cardápio iniciado com sucesso!');
         console.log('🔄 Sincronização em tempo real ATIVA');
@@ -233,7 +294,12 @@ async function init() {
 
     } catch (error) {
         console.error('❌ Erro ao inicializar:', error);
-        showError();
+
+        if (error.message.includes('autenticado') || error.message.includes('Timeout')) {
+            showError('É necessário estar logado para ver o cardápio');
+        } else {
+            showError('Erro ao carregar cardápio');
+        }
     }
 }
 
