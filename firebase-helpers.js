@@ -3,12 +3,12 @@
 // Coloque na raiz do projeto: /firebase-helpers.js
 // ============================================
 
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 // ============================================
-// CONFIGURAÇÃO DO FIREBASE
+// CONFIGURAÇÃO DO FIREBASE (SINGLETON GLOBAL)
 // ============================================
 
 export const firebaseConfig = {
@@ -20,26 +20,53 @@ export const firebaseConfig = {
     appId: "1:318295225306:web:3beaebbb5979edba6686e3"
 };
 
-// Inicializar Firebase (singleton)
-let app;
-let auth;
-let db;
+// Variáveis globais (singleton)
+let firebaseApp = null;
+let firebaseAuth = null;
+let firebaseDb = null;
+let isInitialized = false;
 
+/**
+ * Inicializa o Firebase apenas uma vez (singleton)
+ * @returns {object} { app, auth, db }
+ */
 export function initializeFirebase() {
-    if (!app) {
-        app = initializeApp(firebaseConfig);
-        auth = getAuth(app);
-        db = getFirestore(app);
-        console.log('✅ Firebase inicializado globalmente');
+    if (isInitialized && firebaseApp) {
+        console.log('✅ Firebase já inicializado (usando cache)');
+        return { app: firebaseApp, auth: firebaseAuth, db: firebaseDb };
     }
-    return { app, auth, db };
+
+    try {
+        // Verificar se já existe uma instância
+        const existingApps = getApps();
+
+        if (existingApps.length > 0) {
+            console.log('✅ Firebase já inicializado (usando instância existente)');
+            firebaseApp = existingApps[0];
+        } else {
+            console.log('🔥 Inicializando Firebase pela primeira vez...');
+            firebaseApp = initializeApp(firebaseConfig);
+        }
+
+        firebaseAuth = getAuth(firebaseApp);
+        firebaseDb = getFirestore(firebaseApp);
+        isInitialized = true;
+
+        console.log('✅ Firebase pronto para uso');
+        return { app: firebaseApp, auth: firebaseAuth, db: firebaseDb };
+
+    } catch (error) {
+        console.error('❌ Erro ao inicializar Firebase:', error);
+        throw error;
+    }
 }
 
 // Auto-inicializar
 const firebase = initializeFirebase();
+
+// Exportar instâncias
+export { firebaseApp, firebaseAuth, firebaseDb };
 export { firebase };
-export const firebaseAuth = firebase.auth;
-export const firebaseDb = firebase.db;
 
 // ============================================
 // OBTER USER ID
