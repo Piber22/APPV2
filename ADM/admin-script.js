@@ -42,7 +42,8 @@ const db = getFirestore(app);
 // ============================================
 
 const AUTHORIZED_ADMINS = [
-    'henriquevergili@gmail.com', // Adicione emails de admins aqui
+    'contato.adrissonpiber@gmail.com', // Adicione emails de admins aqui
+    'adrissonpiber22@gmail.com'
 ];
 
 // ============================================
