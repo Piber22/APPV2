@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Painel Administrativo - Doce Gestão">
+    <meta name="theme-color" content="#ec4899">
+    <title>Admin - Doce Gestão</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Pacifico&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="admin-styles.css">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <h2 class="loading-title">Doce Gestão Admin</h2>
+            <p class="loading-text">Carregando dados dos usuários...</p>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header>
+        <div class="header-container">
+            <div class="header-left">
+                <div class="logo-icon">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <h1 class="logo-text">Admin Panel</h1>
+                <span class="page-subtitle">Gestão de Usuários</span>
+            </div>
+            <div class="header-right">
+                <div class="admin-badge">
+                    <i class="fas fa-crown"></i>
+                    <span id="adminName">Admin</span>
+                </div>
+                <button class="btn-logout" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Sair</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="main-container">
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon total">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="stat-info">
+                    <div class="stat-value" id="totalUsers">0</div>
+                    <div class="stat-label">Total de Usuários</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon active">
+                    <i class="fas fa-user-check"></i>
+                </div>
+                <div class="stat-info">
+                    <div class="stat-value" id="activeUsers">0</div>
+                    <div class="stat-label">Licenças Ativas</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon trial">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="stat-info">
+                    <div class="stat-value" id="trialUsers">0</div>
+                    <div class="stat-label">Em Trial</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon expired">
+                    <i class="fas fa-user-slash"></i>
+                </div>
+                <div class="stat-info">
+                    <div class="stat-value" id="expiredUsers">0</div>
+                    <div class="stat-label">Expiradas</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters and Search -->
+        <div class="card">
+            <div class="filters-container">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Buscar por nome ou email...">
+                </div>
+
+                <div class="filter-buttons">
+                    <button class="filter-btn active" data-filter="all">
+                        <i class="fas fa-globe"></i>
+                        Todos
+                    </button>
+                    <button class="filter-btn" data-filter="active">
+                        <i class="fas fa-check-circle"></i>
+                        Ativos
+                    </button>
+                    <button class="filter-btn" data-filter="trial">
+                        <i class="fas fa-clock"></i>
+                        Trial
+                    </button>
+                    <button class="filter-btn" data-filter="expired">
+                        <i class="fas fa-ban"></i>
+                        Expirados
+                    </button>
+                </div>
+
+                <button class="btn-export" onclick="exportUsers()">
+                    <i class="fas fa-download"></i>
+                    Exportar CSV
+                </button>
+            </div>
+        </div>
+
+        <!-- Users Table -->
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <i class="fas fa-list"></i> Lista de Usuários
+                </h2>
+                <div class="sort-controls">
+                    <label>Ordenar por:</label>
+                    <select id="sortSelect">
+                        <option value="createdAt-desc">Mais Recentes</option>
+                        <option value="createdAt-asc">Mais Antigos</option>
+                        <option value="displayName-asc">Nome (A-Z)</option>
+                        <option value="displayName-desc">Nome (Z-A)</option>
+                        <option value="email-asc">Email (A-Z)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="users-table">
+                    <thead>
+                        <tr>
+                            <th>Usuário</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Tipo de Licença</th>
+                            <th>Vencimento</th>
+                            <th>Cadastro</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+                        <!-- Usuários serão inseridos aqui -->
+                    </tbody>
+                </table>
+
+                <div id="emptyState" class="empty-state" style="display: none;">
+                    <i class="fas fa-users-slash"></i>
+                    <h3>Nenhum usuário encontrado</h3>
+                    <p>Ajuste os filtros ou a busca para ver os resultados</p>
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination" id="pagination" style="display: none;">
+                <button class="pagination-btn" id="btnPrevPage" disabled>
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <span class="pagination-info" id="paginationInfo">Página 1 de 1</span>
+                <button class="pagination-btn" id="btnNextPage" disabled>
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal de Edição -->
+    <div id="modalEditUser" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">
+                    <i class="fas fa-user-edit"></i>
+                    Editar Usuário
+                </h2>
+                <button class="btn-close" onclick="closeModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <div class="user-info-display">
+                    <div class="user-avatar-large" id="modalUserAvatar">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="user-details-large">
+                        <h3 id="modalUserName">Nome do Usuário</h3>
+                        <p id="modalUserEmail">email@example.com</p>
+                        <span class="user-id-badge">
+                            <i class="fas fa-fingerprint"></i>
+                            ID: <span id="modalUserId">uid123</span>
+                        </span>
+                    </div>
+                </div>
+
+                <form id="editUserForm">
+                    <div class="form-section">
+                        <h4><i class="fas fa-key"></i> Configurações de Licença</h4>
+
+                        <div class="form-group">
+                            <label>Tipo de Licença</label>
+                            <select id="licenseType" required>
+                                <option value="trial">Trial (7 dias)</option>
+                                <option value="monthly">Mensal</option>
+                                <option value="quarterly">Trimestral</option>
+                                <option value="annual">Anual</option>
+                                <option value="lifetime">Vitalícia</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Status da Licença</label>
+                            <select id="licenseStatus" required>
+                                <option value="active">Ativa</option>
+                                <option value="trial">Trial</option>
+                                <option value="expired">Expirada</option>
+                                <option value="cancelled">Cancelada</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Data de Vencimento</label>
+                            <input type="date" id="expirationDate" required>
+                        </div>
+
+                        <div class="form-group checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="autoRenew">
+                                <span>Renovação Automática</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h4><i class="fas fa-cog"></i> Configurações Adicionais</h4>
+
+                        <div class="form-group">
+                            <label>Notas do Admin (opcional)</label>
+                            <textarea id="adminNotes" rows="3" placeholder="Adicione observações sobre este usuário..."></textarea>
+                        </div>
+
+                        <div class="form-group checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="sendNotification">
+                                <span>Enviar notificação ao usuário sobre as alterações</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button type="button" class="btn-secondary" onclick="closeModal()">
+                            Cancelar
+                        </button>
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-save"></i>
+                            Salvar Alterações
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação de Exclusão -->
+    <div id="modalConfirmDelete" class="modal">
+        <div class="modal-content modal-small">
+            <div class="modal-header danger">
+                <h2 class="modal-title">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Confirmar Exclusão
+                </h2>
+            </div>
+            <div class="modal-body">
+                <p class="warning-text">
+                    Tem certeza que deseja excluir este usuário?
+                </p>
+                <p class="user-delete-info">
+                    <strong id="deleteUserName">Nome</strong><br>
+                    <small id="deleteUserEmail">email@example.com</small>
+                </p>
+                <div class="warning-box">
+                    <i class="fas fa-info-circle"></i>
+                    Esta ação não pode ser desfeita. Todos os dados do usuário serão permanentemente removidos.
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" onclick="closeDeleteModal()">
+                    Cancelar
+                </button>
+                <button type="button" class="btn-danger" onclick="confirmDelete()">
+                    <i class="fas fa-trash"></i>
+                    Excluir Usuário
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <i class="fas fa-check-circle"></i>
+        <span id="toastMessage">Operação realizada com sucesso!</span>
+    </div>
+
+    <!-- Auth Guard e Scripts -->
+    <script type="module" src="../auth-guard.js"></script>
+    <script type="module" src="admin-script.js"></script>
+</body>
+</html>
