@@ -109,14 +109,40 @@ async function loadUsers() {
 
         allUsers = [];
 
+        console.log(`🔍 Encontrados ${querySnapshot.size} documentos na collection 'users'`);
+
         for (const docSnap of querySnapshot.docs) {
             const userId = docSnap.id;
             const userData = docSnap.data();
 
+            console.log(`👤 Processando usuário: ${userId}`);
+            console.log(`   - Email: ${userData.email}`);
+            console.log(`   - Nome: ${userData.displayName}`);
+
             // Buscar dados de licença
             const licenseRef = doc(db, 'users', userId, 'config', 'license');
             const licenseSnap = await getDoc(licenseRef);
+
+            if (licenseSnap.exists()) {
+                console.log(`   ✅ Licença encontrada para ${userId}`);
+                console.log(`   📄 Dados da licença:`, licenseSnap.data());
+            } else {
+                console.log(`   ⚠️ Licença NÃO encontrada para ${userId} - usando valores padrão`);
+            }
+
             const licenseData = licenseSnap.exists() ? licenseSnap.data() : {};
+
+            // Converter Timestamp para Date se necessário
+            let expirationDate = null;
+            if (licenseData.expirationDate) {
+                if (licenseData.expirationDate.toDate) {
+                    expirationDate = licenseData.expirationDate.toDate();
+                } else if (licenseData.expirationDate instanceof Date) {
+                    expirationDate = licenseData.expirationDate;
+                } else {
+                    expirationDate = new Date(licenseData.expirationDate);
+                }
+            }
 
             allUsers.push({
                 uid: userId,
@@ -127,13 +153,22 @@ async function loadUsers() {
                 // Dados de licença
                 licenseType: licenseData.type || 'trial',
                 licenseStatus: licenseData.status || 'trial',
-                expirationDate: licenseData.expirationDate?.toDate() || null,
+                expirationDate: expirationDate,
                 autoRenew: licenseData.autoRenew || false,
-                adminNotes: licenseData.adminNotes || ''
+                adminNotes: licenseData.adminNotes || '',
+                // Dados de auditoria
+                lastModified: licenseData.lastModified?.toDate() || null,
+                modifiedBy: licenseData.modifiedBy || null,
+                modifiedByEmail: licenseData.modifiedByEmail || null
             });
         }
 
         console.log(`✅ ${allUsers.length} usuários carregados`);
+        console.log('📊 Resumo dos usuários:', allUsers.map(u => ({
+            email: u.email,
+            status: u.licenseStatus,
+            type: u.licenseType
+        })));
 
         applyFiltersAndSort();
         updateStats();
@@ -141,8 +176,9 @@ async function loadUsers() {
 
     } catch (error) {
         console.error('❌ Erro ao carregar usuários:', error);
+        console.error('📋 Detalhes do erro:', error.message);
         hideLoading();
-        showToast('Erro ao carregar usuários', 'error');
+        showToast('Erro ao carregar usuários: ' + error.message, 'error');
     }
 }
 
@@ -376,34 +412,66 @@ async function saveUserChanges(e) {
     try {
         const licenseType = document.getElementById('licenseType').value;
         const licenseStatus = document.getElementById('licenseStatus').value;
-        const expirationDate = new Date(document.getElementById('expirationDate').value);
+        const expirationDateStr = document.getElementById('expirationDate').value;
         const autoRenew = document.getElementById('autoRenew').checked;
         const adminNotes = document.getElementById('adminNotes').value.trim();
 
         console.log('💾 Salvando alterações do usuário:', editingUserId);
+        console.log('📋 Dados a salvar:', {
+            type: licenseType,
+            status: licenseStatus,
+            expirationDate: expirationDateStr,
+            autoRenew: autoRenew,
+            adminNotes: adminNotes
+        });
 
-        // Atualizar no Firebase
+        // Converter data para Timestamp do Firebase
+        const expirationDate = new Date(expirationDateStr);
+        expirationDate.setHours(23, 59, 59, 999); // Fim do dia
+
+        // Referência do documento de licença
         const licenseRef = doc(db, 'users', editingUserId, 'config', 'license');
 
-        await setDoc(licenseRef, {
+        // Dados a salvar
+        const licenseData = {
             type: licenseType,
             status: licenseStatus,
             expirationDate: expirationDate,
             autoRenew: autoRenew,
             adminNotes: adminNotes,
             lastModified: serverTimestamp(),
-            modifiedBy: currentAdmin.uid
-        }, { merge: true });
+            modifiedBy: currentAdmin.uid,
+            modifiedByEmail: currentAdmin.email
+        };
 
-        console.log('✅ Alterações salvas com sucesso');
+        // Salvar no Firebase (setDoc com merge cria o documento se não existir)
+        await setDoc(licenseRef, licenseData, { merge: true });
+
+        console.log('✅ Documento salvo em: users/' + editingUserId + '/config/license');
+        console.log('📄 Dados salvos:', licenseData);
+
+        // Verificar se realmente salvou
+        const verifySnap = await getDoc(licenseRef);
+        if (verifySnap.exists()) {
+            console.log('✅ VERIFICAÇÃO: Documento existe no Firebase!');
+            console.log('📊 Dados confirmados:', verifySnap.data());
+        } else {
+            console.warn('⚠️ ATENÇÃO: Documento não foi encontrado após salvar!');
+        }
+
         showToast('Usuário atualizado com sucesso!', 'success');
 
         closeModal();
-        await loadUsers();
+
+        // Aguardar 500ms antes de recarregar para dar tempo do Firebase sincronizar
+        setTimeout(async () => {
+            await loadUsers();
+        }, 500);
 
     } catch (error) {
         console.error('❌ Erro ao salvar alterações:', error);
-        showToast('Erro ao salvar alterações', 'error');
+        console.error('📋 Detalhes do erro:', error.message);
+        showToast('Erro ao salvar: ' + error.message, 'error');
     }
 }
 
@@ -609,3 +677,82 @@ window.closeDeleteModal = closeDeleteModal;
 window.confirmDelete = confirmDelete;
 window.exportUsers = exportUsers;
 window.logout = logout;
+
+// ============================================
+// DEBUG: TESTAR CONEXÃO FIREBASE
+// ============================================
+
+window.testFirebaseConnection = async function() {
+    console.log('═══════════════════════════════════════');
+    console.log('🔬 TESTE DE CONEXÃO FIREBASE');
+    console.log('═══════════════════════════════════════');
+
+    try {
+        // Pegar primeiro usuário para teste
+        if (allUsers.length === 0) {
+            alert('❌ Nenhum usuário carregado. Recarregue a página primeiro.');
+            return;
+        }
+
+        const testUser = allUsers[0];
+        console.log('👤 Usuário de teste:', testUser.email);
+        console.log('🆔 UID:', testUser.uid);
+
+        // Testar leitura
+        console.log('\n📖 TESTE 1: Lendo documento de licença...');
+        const licenseRef = doc(db, 'users', testUser.uid, 'config', 'license');
+        const licenseSnap = await getDoc(licenseRef);
+
+        if (licenseSnap.exists()) {
+            console.log('✅ Documento existe!');
+            console.log('📄 Dados atuais:', licenseSnap.data());
+        } else {
+            console.log('⚠️ Documento não existe. Será criado no próximo teste.');
+        }
+
+        // Testar escrita
+        console.log('\n✍️ TESTE 2: Tentando escrever...');
+        const testData = {
+            type: 'trial',
+            status: 'active',
+            expirationDate: new Date('2025-12-31'),
+            autoRenew: false,
+            adminNotes: 'Teste de conexão - ' + new Date().toISOString(),
+            lastModified: serverTimestamp(),
+            modifiedBy: currentAdmin.uid,
+            modifiedByEmail: currentAdmin.email,
+            testMode: true
+        };
+
+        await setDoc(licenseRef, testData, { merge: true });
+        console.log('✅ Escrita bem-sucedida!');
+
+        // Verificar se escreveu
+        console.log('\n🔍 TESTE 3: Verificando escrita...');
+        const verifySnap = await getDoc(licenseRef);
+
+        if (verifySnap.exists()) {
+            const data = verifySnap.data();
+            console.log('✅ Dados confirmados no Firebase:');
+            console.log(data);
+
+            if (data.testMode) {
+                console.log('✅ Campo de teste encontrado! Conexão OK!');
+                alert('✅ TESTE PASSOU!\n\nConexão com Firebase está funcionando.\nVerifique o console (F12) para mais detalhes.');
+            } else {
+                console.warn('⚠️ Campo de teste não encontrado. Dados podem não estar sendo salvos.');
+                alert('⚠️ Atenção!\n\nEscrita funcionou mas dados podem estar incompletos.\nVerifique o console (F12).');
+            }
+        } else {
+            console.error('❌ Documento não foi encontrado após escrita!');
+            alert('❌ ERRO!\n\nDados não estão sendo salvos no Firebase.\nVerifique as regras de segurança.');
+        }
+
+    } catch (error) {
+        console.error('❌ ERRO NO TESTE:', error);
+        console.error('📋 Mensagem:', error.message);
+        alert('❌ ERRO!\n\n' + error.message + '\n\nVerifique o console (F12) para mais detalhes.');
+    }
+
+    console.log('═══════════════════════════════════════');
+};
